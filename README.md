@@ -1,5 +1,5 @@
 # SMART-vocoder
-This repository is the official implementation of SMART-Vocoder
+This repository provides the official pytorch implementation of SMART-Vocoder
 
 ## Requirements
 To install requirements:
