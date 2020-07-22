@@ -50,11 +50,10 @@ class SqueezeLayer(nn.Module):
         
 
 class ActNorm(nn.Module):
-    def __init__(self, in_channel, pretrained=False):
+    def __init__(self, in_channels, pretrained=False):
         super().__init__()
-        self.dim = dim
-        self.loc = nn.Parameter(torch.zeros(1, in_channel, 1))
-        self.scale = nn.Parameter(torch.ones(1, in_channel, 1))
+        self.loc = nn.Parameter(torch.zeros(1, in_channes, 1))
+        self.scale = nn.Parameter(torch.ones(1, in_channels, 1))
 
         self.initialized = pretrained
 
@@ -83,14 +82,9 @@ class ActNorm(nn.Module):
             self.initialized = True
 
         log_abs = logabs(self.scale)
-        if self.dim == 3:
-            B, C, T = x.size()
-            log_det = torch.sum(log_abs) * B * T
-        elif self.dim == 4:
-            B, C, H, W = x.size()
-            log_det = torch.sum(log_abs) * B * H * W
+        B, C, T = x.size()
+        log_det = torch.sum(log_abs) * B * T
 
-        # Instead of < y = s * x + b > in Eq.(25), we use < y = s * (x + b) > for ease of implementation.
         return self.scale * (x + self.loc), log_det
 
     def reverse(self, output):

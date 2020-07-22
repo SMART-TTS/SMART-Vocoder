@@ -4,6 +4,6 @@ class Hyperparameters():
         self.n_flow_blocks = args.n_flow_blocks
         self.n_layers = args.n_layers
         self.n_channels = args.n_channels
-        self.sqz_scale_i = hps.sqz_scale_i
-        self.sqz_scale = hps.sqz_scale
+        self.sqz_scale_i = args.sqz_scale_i
+        self.sqz_scale = args.sqz_scale
         self.pretrained = True if args.load_step > 0 else False
