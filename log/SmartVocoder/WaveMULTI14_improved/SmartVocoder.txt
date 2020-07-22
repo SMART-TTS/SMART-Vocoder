@@ -1,6 +1,0 @@
-{"n_params": 5402194}
-{"n_params": 5402194}
-{"n_params": 5402194}
-{"n_params": 5025634}
-{"n_params": 5025634}
-{"n_params": 5025634}
