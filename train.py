@@ -7,7 +7,7 @@ from args import parse_args
 from data import KORDataset, collate_fn, collate_fn_synthesize
 from hps import Hyperparameters
 from model import SmartVocoder
-from utils import actnorm_init, count_nfe, get_logger, mkdir
+from utils import actnorm_init, get_logger, mkdir
 import numpy as np
 import librosa
 import os
@@ -30,12 +30,16 @@ def load_dataset(args):
     synth_loader = DataLoader(test_dataset, batch_size=1, collate_fn=collate_fn_synthesize,
                               num_workers=args.num_workers, pin_memory=True)
 
+    print('num of train samples', len(train_loader))
+    print('num of test samples', len(test_loader))
+
     return train_loader, test_loader, synth_loader
 
 
 def build_model(hps, log):
     model = SmartVocoder(hps)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(model)
     print('number of parameters:', n_params)
     state = {}
     state['n_params'] = n_params
@@ -256,9 +260,7 @@ if __name__ == "__main__":
         # new model
         global_epoch = 0
         global_step = 0
-        
-        if args.norm == 'actnorm':
-            actnorm_init(train_loader, model, device)
+        actnorm_init(train_loader, model, device)
 
     else:
         # saved model

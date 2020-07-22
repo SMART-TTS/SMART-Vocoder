@@ -4,13 +4,13 @@ import numpy as np
 import os
 from datetime import datetime
 
-max_time_steps = 16000
+max_time_steps = 19200
 upsample_conditional_features = True
-hop_length = 256
+hop_length = 300
 
 
 class KORDataset(Dataset):
-    def __init__(self, data_root, train=True, test_size=0.05):
+    def __init__(self, data_root, train=True, test_size=0.1):
         self.data_root = data_root
         self.lengths = []
         self.train = train
@@ -37,18 +37,18 @@ class KORDataset(Dataset):
         with open(meta, "rb") as f:
             lines = f.readlines()
         l = lines[0].decode("utf-8").split("|")
-        assert len(l) == 4
+        assert len(l) == 3
         self.lengths = list(
             map(lambda l: int(l.decode("utf-8").split("|")[2]), lines))
 
         paths = list(map(lambda l: l.decode("utf-8").split("|")[col], lines))
         paths = list(map(lambda f: os.path.join(self.data_root, f), paths))
-
         # Filter by train/test
         indices = self.interest_indices(paths)
         paths = list(np.array(paths)[indices])
         self.lengths = list(np.array(self.lengths)[indices])
         self.lengths = list(map(int, self.lengths))
+
         return paths
 
 

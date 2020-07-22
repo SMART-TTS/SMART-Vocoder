@@ -15,9 +15,10 @@ def parse_args():
     parser.add_argument('--synth_interval', type=int, default=750, help='Sampling interval during training')
     parser.add_argument('--num_sample', type=int, default=1, help='Number of samples to synthesize during training')
 
+    parser.add_argument('--hop_size', type=int, default=300, help='Hop size')
 
-    parser.add_argument('--sqz_scale_i', type=int, default=4, help='Initial squeeze scale')
-    parser.add_argument('--sqz_scale', type=int, default=4, help='Squeeze scale between Equal Resolution blocks')
+    parser.add_argument('--sqz_scale_i', type=int, default=2, help='Initial squeeze scale (do not change the value)')
+    parser.add_argument('--sqz_scale', type=int, default=2, help='Squeeze scale between Equal Resolution blocks (sqz_scale shuold be 4)')
     parser.add_argument('--n_ER_blocks', type=int, default=4, help='Number of Equal Resolution blocks')
     parser.add_argument('--n_flow_blocks', type=int, default=4, help='Number of flow blocks in Equal Resolution block')
     parser.add_argument('--n_layers', type=int, default=8, help='Number of layers in WaveNet')

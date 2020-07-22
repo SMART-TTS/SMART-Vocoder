@@ -1,10 +1,115 @@
 import torch
 from torch import nn
-from wavenet import WaveNetAR, WaveNetGlow2
+from wavenet import WaveNet
 from math import log, pi, sqrt
 import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.distributions.normal import Normal
+
+
+def fused_add_tanh_sigmoid_multiply(input_a, input_b, n_channels, audio_shape=None):
+    if audio_shape is not None:
+        B, C, H, W = audio_shape
+        input_a = input_a[:,:,:H,:]
+    n_channels_int = n_channels[0]
+    in_act = input_a + input_b 
+    t_act = torch.tanh(in_act[:, :n_channels_int])
+    s_act = torch.sigmoid(in_act[:, n_channels_int:])
+    acts = t_act * s_act
+    return acts
+
+
+class WaveNet(nn.Module):
+    def __init__(self, in_channels, cin_channels, di_base, pos_group, n_channels, n_layers, kernel_size=3):
+        super().__init__()
+        assert(kernel_size % 2 == 1)
+        assert(n_channels % 2 == 0)
+        self.n_layers = n_layers
+        self.n_channels = n_channels
+        self.pos_group = pos_group
+
+        self.in_layers = torch.nn.ModuleList()
+        self.time_layers = torch.nn.ModuleList()
+        self.res_skip_layers = torch.nn.ModuleList()
+
+        start = torch.nn.Conv1d(in_channels, n_channels, 1)
+        start = torch.nn.utils.weight_norm(start, name='weight')
+        self.start = start
+
+        # Initializing last layer to 0 makes the affine coupling layers
+        # do nothing at first.  This helps with training stability
+        out_channels = in_channels * 2
+        end = torch.nn.Conv1d(n_channels, out_channels, 1)
+        end.weight.data.zero_()
+        end.bias.data.zero_()
+        self.end = end
+        print('pos_group', pos_group)
+        cond_layer = torch.nn.Conv1d(cin_channels, 2*n_channels*n_layers, 1)
+        self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
+        if pos_group > 1:
+            pos_emb = torch.nn.Embedding(pos_group, 64)
+            pos_layer = torch.nn.Linear(64, 2*n_channels*n_layers)
+            self.pos_layer = torch.nn.utils.weight_norm(pos_layer, name='weight')
+            self.pos_emb = torch.nn.utils.weight_norm(pos_emb, name='weight')
+
+        for i in range(n_layers):
+            dilation = di_base ** i
+            
+            padding = int((kernel_size*dilation - dilation)) // 2
+
+            in_layer = torch.nn.Conv1d(n_channels, 2*n_channels, kernel_size,
+                                       dilation=dilation, padding=padding)
+            in_layer = torch.nn.utils.weight_norm(in_layer, name='weight')
+            self.in_layers.append(in_layer)
+
+            # last one is not necessary
+            if i < n_layers - 1:
+                res_skip_channels = 2*n_channels
+            else:
+                res_skip_channels = n_channels
+            res_skip_layer = torch.nn.Conv1d(n_channels, res_skip_channels, 1)
+            res_skip_layer = torch.nn.utils.weight_norm(
+                res_skip_layer, name='weight')
+            self.res_skip_layers.append(res_skip_layer)
+
+    def forward(self, audio, spect, pos=None):
+        audio = self.start(audio)
+        output = torch.zeros_like(audio)
+        n_channels_tensor = torch.IntTensor([self.n_channels])
+
+        spect = self.cond_layer(spect)
+
+        if pos is not None:
+            pos = self.pos_emb(pos)
+            pos = self.pos_layer(pos)
+            pos = pos.unsqueeze(2)
+
+        for i in range(self.n_layers):
+            pos_offset = spect_offset = i*2*self.n_channels
+            spect_in = spect[:, spect_offset:spect_offset+2*self.n_channels, :]
+            pos_in = pos[:, pos_offset:pos_offset+2*self.n_channels, :] if pos is not None else None
+
+            acts = self.tanh_sigmoid_activation(n_channels_tensor, self.in_layers[i](audio), spect_in, pos_in)
+
+            res_skip_acts = self.res_skip_layers[i](acts)
+            if i < self.n_layers - 1:
+                audio = audio + res_skip_acts[:, :self.n_channels, :]
+                output = output + res_skip_acts[:, self.n_channels:, :]
+            else:
+                output = output + res_skip_acts
+        
+        return self.end(output).chunk(2,1)
+
+    def tanh_sigmoid_activation(self, n_channels, input_a, input_b, input_c=None):
+        n_channels_int = n_channels[0]
+        in_act = input_a + input_b 
+        if input_c is not None:
+            in_act = in_act + input_c 
+        t_act = torch.tanh(in_act[:, :n_channels_int])
+        s_act = torch.sigmoid(in_act[:, n_channels_int:])
+        acts = t_act * s_act
+
+        return acts
 
 
 class SqueezeLayer(nn.Module):
@@ -121,7 +226,7 @@ class PosConditionedFlow(nn.Module):
         super().__init__()
         self.pos_group = pos_group
         self.in_channels = in_channels
-        self.WN = WaveNetGlow2(in_channels//2, cin_channels, dilation, pos_group, n_channels, n_layers)
+        self.WN = WaveNet(in_channels//2, cin_channels, dilation, pos_group, n_channels, n_layers)
 
     def forward(self, x, c, log_det):
         if self.pos_group > 1:
@@ -174,38 +279,52 @@ class EqualResolutionBlock(nn.Module):
         return x, c
 
 
+class UpsampleConv(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv_list = nn.ModuleList()
+
+        for s in [30, 10]:
+            convt = nn.ConvTranspose2d(1, 1, (3, 2 * s), padding=(1, s // 2), stride=(1, s))
+            convt = nn.utils.weight_norm(convt)
+            nn.init.kaiming_normal_(convt.weight)
+            self.conv_list.append(convt)
+            self.conv_list.append(nn.LeakyReLU(0.4))
+
+    def forward(self, mel):
+        c = mel.unsqueeze(1)
+        for conv in self.conv_list:
+            c = conv(c)
+        c = c.squeeze(1)
+
+        return c
+
+
 class SmartVocoder(nn.Module):
     def __init__(self, hps):
         super().__init__()
 
         in_channels = 1  # number of channels in audio
         cin_channels = 80  # number of channels in mel-spectrogram (freq. axis)
+        self.sqz_scale_i = hps.sqz_scale_i
+        self.sqz_scale = hps.sqz_scale
 
         self.n_ER_blocks = hps.n_ER_blocks
         self.n_flow_blocks = hps.n_flow_blocks
         self.n_layers = hps.n_layers
         self.n_channels = hps.n_channels
-
         self.pretrained = hps.pretrained
-        
         self.sqz_layer = SqueezeLayer(hps.sqz_scale_i)
         self.ER_blocks = nn.ModuleList()
-
-        self.upsample_conv = nn.ModuleList()
-        for s in [4, 4, 4]:
-            convt = nn.ConvTranspose2d(1, 1, (3, 2 * s), padding=(1, s // 2), stride=(1, s))
-            convt = nn.utils.weight_norm(convt)
-            nn.init.kaiming_normal_(convt.weight)
-            self.upsample_conv.append(convt)
-            self.upsample_conv.append(nn.LeakyReLU(0.4))
+        self.upsample_conv = UpsampleConv()
         
         in_channels *= hps.sqz_scale_i
-        for i in range(self.n_ER_blocks):
+        pos_group = 1
+        for i in range(hps.n_ER_blocks):
             dilation_base = 2 if i < 2 else 1
-            pos_group = hps.sqz_scale ** (i-1)
             self.ER_blocks.append(self.build_ER_block(hps.n_flow_blocks, in_channels, cin_channels, dilation_base, 
                                 pos_group, hps.n_channels, hps.n_layers, hps.pretrained))
-            in_channels *= hps.sqz_scale
+            pos_group *= hps.sqz_scale
         
     def build_ER_block(self, n_flow_blocks, in_channels, cin_channels, di_base, pos_group, n_channels, n_layers, pretrained):
         chains = []
@@ -220,21 +339,14 @@ class SmartVocoder(nn.Module):
 
     def forward(self, x, mel):
         Bx, Cx, Tx = x.size()
-        c = mel.unsqueeze(1)
-        c_list = [mel]
-        for i, conv in enumerate(self.upsample_conv):
-            c = conv(c)
-            if i % 2 == 1:
-                c_list.append(c.squeeze(1))
-        c_list = c_list[::-1]
-        
+        c = self.upsample_conv(mel)
         out = self.sqz_layer(x).squeeze(1)
         log_det = 0
         c_in = c_list[0]
-        for i, block in enumerate(self.Glow_blocks):
+        for i, block in enumerate(self.ER_blocks):
             out, _, log_det = block(out, c_in, log_det)
 
-            if i != len(self.Glow_blocks) -1 :
+            if i != len(self.ER_blocks) -1 :
                 B, C, T = out.shape
                 out = out.view(B, C, T//4, 4).permute(0,1,3,2).contiguous().view(4*B,C,T//4)
                 
@@ -257,20 +369,20 @@ class SmartVocoder(nn.Module):
                 c_list.append(c.squeeze(1))
 
         out = self.sqz_layer(z).squeeze(1)
-        for i in range(len(self.Glow_blocks)-1):
+        for i in range(len(self.ER_blocks)-1):
             B, C, T = out.shape
             out = out.view(B, C, T//4, 4).permute(0,1,3,2).contiguous().view(4*B,C,T//4)
 
         Bc, Cc, Tc = c_list[0].shape
-        c_in = c_list[0].repeat(1, 4 ** (len(self.Glow_blocks)-1), 1).view(-1, Cc, Tc)
-        for i, block in enumerate(self.Glow_blocks[::-1]):
+        c_in = c_list[0].repeat(1, 4 ** (len(self.ER_blocks)-1), 1).view(-1, Cc, Tc)
+        for i, block in enumerate(self.ER_blocks[::-1]):
             out, _ = block.reverse(out, c_in)
 
-            if i != len(self.Glow_blocks)-1 :
+            if i != len(self.ER_blocks)-1 :
                 B, C, T = out.shape
                 out = out.view(B//4, C, 4, T).permute(0,1,3,2).contiguous().view(B//4, C, 4 * T)
                 Bc, Cc, Tc = c_list[i+1].shape
-                c_in = c_list[i+1].repeat(1, 4 ** (len(self.Glow_blocks)-2-i), 1).view(-1, Cc, Tc)
+                c_in = c_list[i+1].repeat(1, 4 ** (len(self.ER_blocks)-2-i), 1).view(-1, Cc, Tc)
             
         out = out.unsqueeze(1)
         x = self.sqz_layer.reverse(out)

@@ -1,5 +1,4 @@
 import torch
-from layers import CNF
 import os
 
 
@@ -12,21 +11,6 @@ def actnorm_init(train_loader, model, device):
     print('ActNorm is initilized!')
 
     del x_seed, c_seed
-
-
-def count_nfe(model):
-    class AccNumEvals(object):
-        def __init__(self):
-            self.num_evals = 0
-
-        def __call__(self, module):
-            if isinstance(module, CNF):
-                self.num_evals += module.num_evals()
-
-    accumulator = AccNumEvals()
-    model.apply(accumulator)
-
-    return accumulator.num_evals
 
 
 def get_logger(log_path, model_name, test_cll=False, test_speed=False):
@@ -45,22 +29,14 @@ def get_logger(log_path, model_name, test_cll=False, test_speed=False):
 
 
 def mkdir(args, synthesize=False, test=False):
-    # set_desc = 'bc-' + str(args.batch_size) + '-d_i-' + str(args.d_i) + '-l-' + str(args.n_layer_wvn) + '-c-' \
-    # + str(args.n_channel_wvn) + '-b-' + str(args.n_block) + '-sc-' + str(args.scale_c) +'-s_h-'+ str(args.scale_h) \
-    # + '-split-' + str(args.split_period) + '-T-' + str(args.T) + '-tol-' + str(args.tol) + '-norm-' + str(args.norm)
-
-    set_desc = 'WaveMULTI14_improved'
-    # set_desc = 'temp'
+    set_desc = 'SMART-Vocoder'
 
     if synthesize:
-        if args.tol_synth != args.tol:
-            sample_path = 'synthesize/' + args.model_name + '/' + set_desc +'/temp_' + str(args.temp) + '-tol-' + str(args.tol_synth)
-        else:
-            sample_path = 'synthesize/' + args.model_name + '/' + set_desc +'/temp_' + str(args.temp)
+        sample_path = 'synthesize/' + args.model_name + '/' + set_desc +'/temp_' + str(args.temp)
         save_path = 'params/' + args.model_name + '/' + set_desc
         if not os.path.isdir(sample_path):
             os.makedirs(sample_path)
-
+            
         return sample_path, save_path
 
     if test:

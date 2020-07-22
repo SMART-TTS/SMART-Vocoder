@@ -19,13 +19,13 @@ def build_from_path(in_dir, out_dir, csv_path, num_workers=1):
             line = line[:last_idx]
             parts = line.split('_')
             wav_path = os.path.join(in_dir, parts[0], parts[1], 'wav', '%s.wav' % parts[2])
-            save_dir = os.path.join(out_dir, parts[0], parts[1])
+            save_dir = os.path.join(parts[0], parts[1])
             futures.append(executor.submit(
-                partial(_process_utterance, save_dir, index, wav_path)))
+                partial(_process_utterance, out_dir, save_dir, index, wav_path)))
             index += 1
     return [future.result() for future in futures]
 
-def _process_utterance(save_dir, index, wav_path):
+def _process_utterance(out_dir, save_dir, index, wav_path):
     # Load the audio to a numpy array:
     sr = 24000
     fft_size = 2048
@@ -65,19 +65,19 @@ def _process_utterance(save_dir, index, wav_path):
     timesteps = len(out)
 
     # Write the spectrograms to disk:
-    audio_filename = 'audio-%05d.npy' % index
-    mel_filename = 'mel-%05d.npy' % index
+    audio_path= os.path.join(save_dir, 'audio-%05d.npy' % index)
+    mel_path = os.path.join(save_dir, 'mel-%05d.npy' % index)
 
-    if not os.path.isdir(save_dir):
-        os.makedirs(save_dir)
+    if not os.path.isdir(os.path.join(out_dir, save_dir)):
+        os.makedirs(os.path.join(out_dir, save_dir))
 
-    np.save(os.path.join(save_dir, audio_filename),
+    np.save(os.path.join(out_dir, audio_path),
             out.astype(np.float32), allow_pickle=False)
-    np.save(os.path.join(save_dir, mel_filename),
+    np.save(os.path.join(out_dir, mel_path),
             mel_spectrogram.astype(np.float32), allow_pickle=False)
 
     # Return a tuple describing this training example:
-    return audio_filename, mel_filename, timesteps
+    return audio_path, mel_path, timesteps
 
 
 def preprocess(in_dir, out_dir, csv_path, num_workers):
