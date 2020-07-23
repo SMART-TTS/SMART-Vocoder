@@ -40,7 +40,7 @@ def mkdir(args, synthesize=False, test=False):
         return sample_path, save_path
 
     if test:
-        log_path = 'test_log/' + args.model_name + '/' + set_desc
+        log_path = 'test_logs/' + args.model_name + '/' + set_desc
         load_path = 'params/' + args.model_name + '/' + set_desc
         if not os.path.isdir(log_path):
             os.makedirs(log_path)
@@ -50,7 +50,7 @@ def mkdir(args, synthesize=False, test=False):
     sample_path = 'samples/' + args.model_name + '/' + set_desc
     save_path = 'params/' + args.model_name + '/' + set_desc
     load_path = 'params/' + args.model_name + '/' + set_desc
-    log_path = 'log/' + args.model_name + '/' + set_desc
+    log_path = 'logs/' + args.model_name + '/' + set_desc
 
     if not os.path.isdir(sample_path):
         os.makedirs(sample_path)

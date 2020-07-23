@@ -36,8 +36,10 @@ def _process_utterance(out_dir, save_dir, index, wav_path):
     fmin = 80
     fmax = 7600
     eps = 1e-10
+
     wav, _ = librosa.load(wav_path, sr=sr)
-    out = wav / np.abs(wav).max() * 0.999
+    wav_trim, _ = librosa.effects.trim(wav, top_db=25)
+    out = wav_trim / np.abs(wav_trim).max() * 0.999
     x_stft = librosa.stft(out, n_fft=fft_size, hop_length=hop_length,
                           win_length=win_length, window=window, pad_mode="reflect")
     spc = np.abs(x_stft).T  # (#frames, #bins)
