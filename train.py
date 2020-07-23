@@ -39,7 +39,7 @@ def load_dataset(args):
 def build_model(hps, log):
     model = SmartVocoder(hps)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(model)
+    # print(model)
     print('number of parameters:', n_params)
     state = {}
     state['n_params'] = n_params
@@ -81,7 +81,6 @@ def train(epoch, model, optimizer, scheduler, log_train, args):
         running_loss[2] += log_det.item()
 
         epoch_loss += loss.item()
-        cnt_nfe += count_nfe(model)
 
         if (batch_idx + 1) % log_interval == 0:
             epoch_step = batch_idx + 1
@@ -145,7 +144,6 @@ def evaluate(epoch, model, log_eval):
         running_loss[1] += log_p.item()
         running_loss[2] += log_det.item()
         epoch_loss += loss.item()
-        cnt_nfe += count_nfe(model)
 
         del x, c, log_p, log_det, loss
 
@@ -193,8 +191,14 @@ def synthesize(model, num_sample):
             wav_name = '{}/generate_{}_{}.wav'.format(
                 sample_path, global_step, batch_idx)
             print('{} seconds'.format(time.time() - timestemp))
-            librosa.output.write_wav(wav_name, wav, sr=22050)
+            librosa.output.write_wav(wav_name, wav, sr=24000)
             print('{} Saved!'.format(wav_name))
+
+            wav_orig = x.squeeze().to(torch.device("cpu")).data.numpy()
+            wav_orig_name = '{}/orig_{}.wav'.format(
+                sample_path, batch_idx)
+            librosa.output.write_wav(wav_orig_name, wav_orig, sr=24000)
+
             del x, c, z, q_0, y_gen, wav
 
 
