@@ -18,12 +18,12 @@ def parse_args():
     parser.add_argument('--hop_size', type=int, default=256, help='Hop size')
 
     parser.add_argument('--sqz_scale_i', type=int, default=4, help='Initial squeeze scale (do not change the value)')
-    parser.add_argument('--sqz_scale', type=int, default=4, help='Squeeze scale between Equal Resolution blocks (sqz_scale shuold be 4)')
+    parser.add_argument('--sqz_scale', type=int, default=2, help='Squeeze scale between Equal Resolution blocks (sqz_scale shuold be 4)')
     parser.add_argument('--n_ER_blocks', type=int, default=4, help='Number of Equal Resolution blocks')
     parser.add_argument('--n_flow_blocks', type=int, default=4, help='Number of flow blocks in Equal Resolution block')
     parser.add_argument('--n_layers', type=list, default=[10, 9, 8, 7], help='Number of layers in WaveNet')
     parser.add_argument('--di_base', type=list, default=[2, 2, 2, 2], help='Number of layers in WaveNet')
-    parser.add_argument('--n_channels', type=int, default=48, help='Number of channels in WaveNet')
+    parser.add_argument('--n_channels', type=int, default=64, help='Number of channels in WaveNet')
 
     # for snthesize.py
     parser.add_argument('--temp', type=float, default=0.6, help='Temperature')

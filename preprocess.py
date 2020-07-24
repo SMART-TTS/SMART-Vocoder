@@ -42,7 +42,7 @@ def _process_utterance(out_dir, save_dir, index, wav_path):
     eps = 1e-10
 
     wav, _ = librosa.load(wav_path, sr=sr)
-    wav_trim, _ = librosa.effects.trim(wav, top_db=25)
+    wav_trim, _ = librosa.effects.trim(wav, top_db=40)
     out = wav_trim
     x_stft = librosa.stft(out, n_fft=fft_size, hop_length=hop_length,
                           win_length=win_length, window=window, pad_mode="reflect")
