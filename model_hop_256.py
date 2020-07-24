@@ -46,8 +46,8 @@ class WaveNet(nn.Module):
         self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
         
         if pos_group > 1:
-            pos_emb = torch.nn.Embedding(pos_group, 64)
-            pos_layer = torch.nn.Linear(64, 2*n_channels*n_layers)
+            pos_emb = torch.nn.Embedding(pos_group, 128)
+            pos_layer = torch.nn.Linear(128, 2*n_channels*n_layers)
             self.pos_layer = torch.nn.utils.weight_norm(pos_layer, name='weight')
             self.pos_emb = torch.nn.utils.weight_norm(pos_emb, name='weight')
 
@@ -267,7 +267,7 @@ class UpsampleConv(nn.Module):
         super().__init__()
         self.conv_list = nn.ModuleList()
 
-        for s in [5, 5, 3]:
+        for s in [4, 4, 4]:
             convt = nn.ConvTranspose2d(1, 1, (3, 2 * s), padding=(1, s // 2), stride=(1, s))
             convt = nn.utils.weight_norm(convt)
             nn.init.kaiming_normal_(convt.weight)
@@ -275,14 +275,14 @@ class UpsampleConv(nn.Module):
             self.conv_list.append(nn.LeakyReLU(0.4))
 
     def forward(self, mel):
+        c_list = [mel]
         c = mel.unsqueeze(1)
         for conv in self.conv_list:
             c = conv(c)
-            if isinstance(conv, nn.ConvTranspose2d):
-                c = c[:,:, :, :-1]
-        c = c.squeeze(1)
+            if isinstance(conv, nn.LeakyReLU):
+                c_list.append(c.squeeze(1))
 
-        return c
+        return c_list
 
 
 class SmartVocoder(nn.Module):
@@ -306,7 +306,7 @@ class SmartVocoder(nn.Module):
         in_channels *= hps.sqz_scale_i
         pos_group = 1
         for i in range(hps.n_ER_blocks):
-            dilation_base = 2
+            dilation_base = hps.di_base[i]
             self.ER_blocks.append(self.build_ER_block(hps.n_flow_blocks, in_channels, cin_channels, dilation_base, 
                                 pos_group, hps.n_channels, hps.n_layers[i], hps.pretrained))
             pos_group *= hps.sqz_scale
@@ -323,7 +323,7 @@ class SmartVocoder(nn.Module):
         return ER_block
 
     def truncate(self, z, mel):
-        hop_size = 300
+        hop_size = 256
         q = self.sqz_scale ** (self.n_ER_blocks - 1)
         res = mel.shape[2] % q
         if res != 0:
@@ -333,25 +333,13 @@ class SmartVocoder(nn.Module):
         return z, mel
 
     def forward(self, x, mel):
-    #     from matplotlib import pyplot as plt
-    #     import numpy as np
-    #     temp_orig = x[0, 0, :].detach().cpu().numpy()
-    #     plt.plot(temp_orig)
-    #     plt.show()
-    #     plt.imshow(mel[0, :, :].detach().cpu().numpy())
-    #     plt.show()
-
         Bx, Cx, Tx = x.size()
         sc = self.sqz_scale
 
-        c = self.upsample_conv(mel)
+        c_list = self.upsample_conv(mel)
+        c_list = c_list[::-1]
+
         out = self.sqz_layer(x)
-
-        c_list = []
-        for i in range(len(self.ER_blocks)):
-            c_in = c[:, :, ::sc**i]
-            c_list.append(c_in)
-
         log_det_sum = 0.0
         c_in = c_list[0]
         for i, block in enumerate(self.ER_blocks):
@@ -376,16 +364,8 @@ class SmartVocoder(nn.Module):
 
         sc = self.sqz_scale
 
-        c = self.upsample_conv(mel)
+        c_list = self.upsample_conv(mel)
         out = self.sqz_layer(z)
-
-        c_list = []
-        for i in range(len(self.ER_blocks)):
-            c_in = c[:, :, ::sc**i]
-            c_list.append(c_in)
-        
-        
-        c_list = c_list[::-1]
 
         sc = self.sqz_scale
         for i in range(len(self.ER_blocks)-1):
