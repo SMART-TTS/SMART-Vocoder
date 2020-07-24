@@ -46,8 +46,8 @@ class WaveNet(nn.Module):
         self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
         
         if pos_group > 1:
-            pos_emb = torch.nn.Embedding(pos_group, 128)
-            pos_layer = torch.nn.Linear(128, 2*n_channels*n_layers)
+            pos_emb = torch.nn.Embedding(pos_group, pos_group*2)
+            pos_layer = torch.nn.Linear(pos_group*2, 2*n_channels*n_layers)
             self.pos_layer = torch.nn.utils.weight_norm(pos_layer, name='weight')
             self.pos_emb = torch.nn.utils.weight_norm(pos_emb, name='weight')
 
@@ -263,11 +263,13 @@ class EqualResolutionBlock(nn.Module):
 
 
 class UpsampleConv(nn.Module):
-    def __init__(self):
+    def __init__(self, sc_i, sc, hop_size, n_blocks):
         super().__init__()
         self.conv_list = nn.ModuleList()
 
-        for s in [4, 4, 4]:
+        s_list = [hop_size // (sc_i * (sc ** (n_blocks-1)))] + [sc for _ in range(n_blocks - 1)]
+
+        for s in s_list:
             convt = nn.ConvTranspose2d(1, 1, (3, 2 * s), padding=(1, s // 2), stride=(1, s))
             convt = nn.utils.weight_norm(convt)
             nn.init.kaiming_normal_(convt.weight)
@@ -275,7 +277,7 @@ class UpsampleConv(nn.Module):
             self.conv_list.append(nn.LeakyReLU(0.4))
 
     def forward(self, mel):
-        c_list = [mel]
+        c_list = []
         c = mel.unsqueeze(1)
         for conv in self.conv_list:
             c = conv(c)
@@ -301,7 +303,7 @@ class SmartVocoder(nn.Module):
         self.pretrained = hps.pretrained
         self.sqz_layer = SqueezeLayer(hps.sqz_scale_i)
         self.ER_blocks = nn.ModuleList()
-        self.upsample_conv = UpsampleConv()
+        self.upsample_conv = UpsampleConv(hps.sqz_scale_i, hps.sqz_scale, hps.hop_size, hps.n_ER_blocks)
 
         in_channels *= hps.sqz_scale_i
         pos_group = 1
