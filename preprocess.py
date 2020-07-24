@@ -27,10 +27,14 @@ def build_from_path(in_dir, out_dir, csv_path, num_workers=1):
 
 def _process_utterance(out_dir, save_dir, index, wav_path):
     # Load the audio to a numpy array:
-    sr = 24000
-    fft_size = 2048
-    hop_length = 300
-    win_length = 1200
+    # sr = 24000
+    sr = 22050
+    # fft_size = 2048
+    fft_size = 1024
+    # hop_length = 300
+    hop_length = 256
+    # win_length = 1200
+    win_length = 1024
     window = 'hann'
     num_mels = 80
     fmin = 80
@@ -104,7 +108,7 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--in_dir', '-i', type=str, default='datasets', help='In Directory')
     parser.add_argument('--csv_path', '-ci', type=str, default='datasets/metadata_jka.csv', help='Metadata path')
-    parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed', help='Out Directory')
+    parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed_hop_256', help='Out Directory')
     args = parser.parse_args()
 
     num_workers = cpu_count()

@@ -29,7 +29,8 @@ def get_logger(log_path, model_name, test_cll=False, test_speed=False):
 
 
 def mkdir(args, synthesize=False, test=False):
-    set_desc = 'SMART-Vocoder'
+    # set_desc = 'SMART-Vocoder'
+    set_desc = 'SMART-Vocoder_hop_256'
 
     if synthesize:
         sample_path = 'synthesize/' + args.model_name + '/' + set_desc +'/temp_' + str(args.temp)
