@@ -19,7 +19,7 @@ def tanh_sigmoid_activation(n_channels, input_a, input_b, input_c=None):
 
 
 class WaveNet(nn.Module):
-    def __init__(self, in_channels, cin_channels, di_cycle, pos_group, n_channels, n_layers, kernel_size=3):
+    def __init__(self, in_channels, cin_channels, di_base, pos_group, n_channels, n_layers, kernel_size=3):
         super().__init__()
         assert(kernel_size % 2 == 1)
         assert(n_channels % 2 == 0)
@@ -46,11 +46,13 @@ class WaveNet(nn.Module):
         self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
         
         if pos_group > 1:
-            pos_emb = torch.nn.Embedding(pos_group, 2*n_channels*n_layers)
+            pos_emb = torch.nn.Embedding(pos_group, pos_group * 2)
+            pos_layer = torch.nn.Linear(pos_group * 2, 2*n_channels*n_layers)
+            self.pos_layer = torch.nn.utils.weight_norm(pos_layer, name='weight')
             self.pos_emb = torch.nn.utils.weight_norm(pos_emb, name='weight')
 
         for i in range(n_layers):
-            dilation = 2 ** (i % di_cycle)
+            dilation = di_base ** i
             padding = int((kernel_size*dilation - dilation)) // 2
 
             in_layer = torch.nn.Conv1d(n_channels, 2*n_channels, kernel_size,
@@ -77,6 +79,7 @@ class WaveNet(nn.Module):
 
         if pos is not None:
             pos = self.pos_emb(pos)
+            pos = self.pos_layer(pos)
             pos = pos.unsqueeze(2)
 
         for i in range(self.n_layers):
@@ -260,30 +263,26 @@ class EqualResolutionBlock(nn.Module):
 
 
 class UpsampleConv(nn.Module):
-    def __init__(self, sc_i, sc, hl, n_blocks):
+    def __init__(self):
         super().__init__()
         self.conv_list = nn.ModuleList()
 
-        up_list = [hl // (sc_i * (sc ** (n_blocks-1)))] + [sc for _ in range(n_blocks - 1)]
-
-        for u in up_list:
-            convt = nn.ConvTranspose2d(1, 1, (3, 2 * u), padding=(1, u // 2), stride=(1, u))
+        for s in [5, 5, 3]:
+            convt = nn.ConvTranspose2d(1, 1, (3, 2 * s), padding=(1, s // 2), stride=(1, s))
             convt = nn.utils.weight_norm(convt)
             nn.init.kaiming_normal_(convt.weight)
             self.conv_list.append(convt)
             self.conv_list.append(nn.LeakyReLU(0.4))
 
     def forward(self, mel):
-        c_list = []
         c = mel.unsqueeze(1)
-        for layer in self.conv_list:
-            c = layer(c)
-            if isinstance(layer, nn.ConvTranspose2d) and layer.stride[1] % 2 == 1:
+        for conv in self.conv_list:
+            c = conv(c)
+            if isinstance(conv, nn.LeakyReLU):
                 c = c[:,:, :, :-1]
-            elif isinstance(layer, nn.LeakyReLU):
-                c_list.append(c.squeeze(1))
+        c = c.squeeze(1)
 
-        return c_list
+        return c
 
 
 class SmartVocoder(nn.Module):
@@ -302,46 +301,65 @@ class SmartVocoder(nn.Module):
         self.pretrained = hps.pretrained
         self.sqz_layer = SqueezeLayer(hps.sqz_scale_i)
         self.ER_blocks = nn.ModuleList()
-        self.upsample_conv = UpsampleConv(hps.sqz_scale_i, hps.sqz_scale, hps.hop_length, hps.n_ER_blocks)
+        self.upsample_conv = UpsampleConv()
 
         in_channels *= hps.sqz_scale_i
         pos_group = 1
         for i in range(hps.n_ER_blocks):
-            dilation_cycle = hps.di_cycle[i]
-            self.ER_blocks.append(self.build_ER_block(hps.n_flow_blocks, in_channels, cin_channels, dilation_cycle, 
+            dilation_base = 2
+            self.ER_blocks.append(self.build_ER_block(hps.n_flow_blocks, in_channels, cin_channels, dilation_base, 
                                 pos_group, hps.n_channels, hps.n_layers[i], hps.pretrained))
             pos_group *= hps.sqz_scale
         
-    def build_ER_block(self, n_flow_blocks, in_channels, cin_channels, di_cycle, pos_group, n_channels, n_layers, pretrained):
+    def build_ER_block(self, n_flow_blocks, in_channels, cin_channels, di_base, pos_group, n_channels, n_layers, pretrained):
         chains = []
         for _ in range(n_flow_blocks):
             chains += [ActNorm(in_channels, pretrained=pretrained)]
             chains += [Invertible1x1Conv(in_channels)]
-            chains += [PosConditionedFlow(in_channels, cin_channels, di_cycle, pos_group, n_channels, n_layers)]
+            chains += [PosConditionedFlow(in_channels, cin_channels, di_base, pos_group, n_channels, n_layers)]
 
         ER_block = EqualResolutionBlock(chains)
 
         return ER_block
 
+    def truncate(self, z, mel):
+        hop_size = 300
+        q = self.sqz_scale ** (self.n_ER_blocks - 1)
+        res = mel.shape[2] % q
+        if res != 0:
+            mel = mel[:, :, :-res]
+            z = z[:, :, :-res*hop_size]
+
+        return z, mel
+
     def forward(self, x, mel):
         Bx, Cx, Tx = x.size()
         sc = self.sqz_scale
 
-        c_list = self.upsample_conv(mel)
-        c_list = c_list[::-1]
-
+        c = self.upsample_conv(mel)
         out = self.sqz_layer(x)
+
+        c_list = [c]
+        for i in range(len(self.ER_blocks)-1):
+            Bc, Cc, Tc = c.shape
+            c = c.permute(0,2,1).contiguous().view(Bc, (Cc*Tc)//sc, sc)
+            c = c.permute(0,2,1).contiguous().view(Bc*sc, Tc//sc, Cc)
+            c = c.permute(0,2,1).contiguous()
+            # c_in = c[:, :, ::sc**i]
+            c_list.append(c)
+
         log_det_sum = 0.0
         c_in = c_list[0]
         for i, block in enumerate(self.ER_blocks):
             out, log_det_sum = block(out, c_in, log_det_sum)
 
-            if i != len(self.ER_blocks) -1:
+            if i != len(self.ER_blocks) -1 :
                 B, C, T = out.shape
                 out = out.permute(0,2,1).contiguous().view(B, (C*T)//sc, sc)
                 out = out.permute(0,2,1).contiguous().view(B*sc, T//sc, C)
                 out = out.permute(0,2,1).contiguous()
-                c_in = torch.repeat_interleave(c_list[i+1], dim=0, repeats=sc**(i+1))
+                # c_in = torch.repeat_interleave(c_list[i+1], dim=0, repeats=sc**(i+1))
+                c_in = c_list[i+1]
         z = out
 
         log_p_sum = 0.5 * (- log(2.0 * pi) - z.pow(2)).sum()
@@ -351,19 +369,38 @@ class SmartVocoder(nn.Module):
         return log_p, log_det
 
     def reverse(self, z, mel):
+        z, mel = self.truncate(z, mel)
+
         sc = self.sqz_scale
 
-        c_list = self.upsample_conv(mel)
+        c = self.upsample_conv(mel)
         out = self.sqz_layer(z)
 
+        # c_list = []
+        # for i in range(len(self.ER_blocks)):
+        #     c_in = c[:, :, ::sc**i]
+        #     c_list.append(c_in)
+        
+        c_list = [c]
+        for i in range(len(self.ER_blocks)-1):
+            Bc, Cc, Tc = c.shape
+            c = c.permute(0,2,1).contiguous().view(Bc, (Cc*Tc)//sc, sc)
+            c = c.permute(0,2,1).contiguous().view(Bc*sc, Tc//sc, Cc)
+            c = c.permute(0,2,1).contiguous()
+            # c_in = c[:, :, ::sc**i]
+            c_list.append(c)
+
+        c_list = c_list[::-1]
+
+        sc = self.sqz_scale
         for i in range(len(self.ER_blocks)-1):
             B, C, T = out.shape
             out = out.permute(0,2,1).contiguous().view(B, (C*T)//sc, sc)
             out = out.permute(0,2,1).contiguous().view(B*sc, T//sc, C)
             out = out.permute(0,2,1).contiguous().view(B*sc, C, T//sc)
 
-        c_in = torch.repeat_interleave(c_list[0], dim=0, repeats=sc**(len(self.ER_blocks)-1))
-
+        # c_in = torch.repeat_interleave(c_list[0], dim=0, repeats=sc**(len(self.ER_blocks)-1))
+        c_in = c_list[0]
         for i, block in enumerate(self.ER_blocks[::-1]):
             out, _ = block.reverse(out, c_in)
 
@@ -372,7 +409,8 @@ class SmartVocoder(nn.Module):
                 out = out.permute(0,2,1).contiguous()
                 out = out.view(B//sc, sc, T, C).permute(0,2,3,1).contiguous()
                 out = out.view(B//sc, T*sc, C).permute(0,2,1).contiguous()
-                c_in = torch.repeat_interleave(c_list[i+1], dim=0, repeats=sc**(len(self.ER_blocks)-2-i))
+                # c_in = torch.repeat_interleave(c_list[i+1], dim=0, repeats=sc**(len(self.ER_blocks)-2-i))
+                c_in = c_list[i+1]
         x = self.sqz_layer.reverse(out)
 
         return x

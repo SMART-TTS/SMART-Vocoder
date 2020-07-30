@@ -4,7 +4,9 @@ import numpy as np
 import os
 from datetime import datetime
 
+max_time_steps = 16000
 upsample_conditional_features = True
+hop_length = 256
 
 class KORDataset(Dataset):
     def __init__(self, data_root, train=True, test_size=0.1):
@@ -60,7 +62,7 @@ def _pad_2d(x, max_len, b_pad=0):
     return x
 
 
-def collate_fn_tr(batch, max_time_steps, hop_length):
+def collate_fn(batch):
     """
     Create batch
 
@@ -115,7 +117,7 @@ def collate_fn_tr(batch, max_time_steps, hop_length):
     return x_batch, c_batch
 
 
-def collate_fn_synth(batch, hop_length):
+def collate_fn_synthesize(batch):
     """
     Create batch
 

@@ -10,7 +10,7 @@ import random
 
 random.seed(1234)
 
-def build_from_path(in_dir, out_dir, csv_path, hop_length, num_workers=1):
+def build_from_path(in_dir, out_dir, csv_path, num_workers=1):
     executor = ProcessPoolExecutor(max_workers=num_workers)
     futures = []
     index = 1
@@ -23,23 +23,20 @@ def build_from_path(in_dir, out_dir, csv_path, hop_length, num_workers=1):
             wav_path = os.path.join(in_dir, parts[0], parts[1], 'wav_16', '%s.wav' % parts[2])
             save_dir = os.path.join(parts[0], parts[1])
             futures.append(executor.submit(
-                partial(_process_utterance, out_dir, save_dir, index, wav_path, hop_length)))
+                partial(_process_utterance, out_dir, save_dir, index, wav_path)))
             index += 1
     return [future.result() for future in futures]
 
-def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
-    if hop_length == 300:
-        sr = 24000
-        fft_size = 2048
-        win_length = 1200
-
-    elif hop_length == 256:
-        sr = 22050
-        fft_size = 1024
-        win_length = 1024
-    else:
-        print('hop_length must be 300 or 256.')
-
+def _process_utterance(out_dir, save_dir, index, wav_path):
+    # Load the audio to a numpy array:
+    # sr = 24000
+    sr = 22050
+    # fft_size = 2048
+    fft_size = 1024
+    # hop_length = 300
+    hop_length = 256
+    # win_length = 1200
+    win_length = 1024
     window = 'hann'
     num_mels = 80
     fmin = 80
@@ -91,42 +88,34 @@ def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
     return audio_path, mel_path, timesteps
 
 
-def preprocess(in_dir, out_dir, csv_path, hop_length, num_workers):
+def preprocess(in_dir, out_dir, csv_path, num_workers):
     os.makedirs(out_dir, exist_ok=True)
-    metadata = build_from_path(in_dir, out_dir, csv_path, hop_length, num_workers)
-    write_metadata(metadata, out_dir, hop_length)
+    metadata = build_from_path(in_dir, out_dir, csv_path, num_workers)
+    write_metadata(metadata, out_dir)
 
 
-def write_metadata(metadata, out_dir, hop_length):
+def write_metadata(metadata, out_dir):
     random.shuffle(metadata)
     with open(os.path.join(out_dir, 'train.txt'), 'w', encoding='utf-8') as f:
         for m in metadata:
             f.write('|'.join([str(x) for x in m]) + '\n')
     frames = sum([m[2] for m in metadata])
-
-    if hop_length == 300:
-        sr = 24000
-    elif hop_length == 256:
-        sr = 22050
-    else:
-        print('hop_length must be 300 or 256.')
-        
+    # sr = 24000
+    sr = 22050
     hours = frames / sr / 3600
     print('Wrote %d utterances, %d time steps (%.2f hours)' % (len(metadata), frames, hours))
 
 
 if __name__ == "__main__":
+    print('<--- Preprocess start --->')
     parser = argparse.ArgumentParser(description='Preprocessing',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--in_dir', '-i', type=str, default='datasets', help='In Directory')
     parser.add_argument('--csv_path', '-ci', type=str, default='datasets/metadata_full.csv', help='Metadata path')
-    parser.add_argument('--hop_length', '-hl', type=int, default=300, help='Hop size')
-    parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed', help='Out Directory')
+    parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed_hop_256', help='Out Directory')
     args = parser.parse_args()
 
-
-    num_workers = cpu_count() - 10
-    out_dir = args.out_dir + '_hop_' + str(args.hop_length)
-    print('<--- Preprocess start --->')
-    preprocess(args.in_dir, out_dir, args.csv_path, args.hop_length, num_workers)
+    num_workers = cpu_count() - 20
+    print('num_workers', num_workers)
+    preprocess(args.in_dir, args.out_dir, args.csv_path, num_workers)
     print('<--- Preprocess done --->')
