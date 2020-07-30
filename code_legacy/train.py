@@ -4,7 +4,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.distributions.normal import Normal
 from args import parse_args
-from data import KORDataset, collate_fn_tr, collate_fn_synth
+from data import KORDataset, collate_fn, collate_fn_synthesize
 from hps import Hyperparameters
 from model import SmartVocoder
 from utils import actnorm_init, get_logger, mkdir
@@ -23,15 +23,11 @@ np.set_printoptions(precision=4)
 def load_dataset(args):
     train_dataset = KORDataset(args.data_path, True, 0.1)
     test_dataset = KORDataset(args.data_path, False, 0.1)
-
-    collate_fn1 = lambda batch: collate_fn_tr(batch, args.max_time_steps, args.hop_length)
-    collate_fn2 = lambda batch: collate_fn_synth(batch, args.hop_length)
-
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn1,
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn,
                               num_workers=args.num_workers, pin_memory=True)
-    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn1,
+    test_loader = DataLoader(test_dataset, batch_size=args.batch_size, collate_fn=collate_fn,
                              num_workers=args.num_workers, pin_memory=True)
-    synth_loader = DataLoader(test_dataset, batch_size=1, collate_fn=collate_fn2,
+    synth_loader = DataLoader(test_dataset, batch_size=1, collate_fn=collate_fn_synthesize,
                               num_workers=args.num_workers, pin_memory=True)
 
     print('num of train samples', len(train_loader))
@@ -43,7 +39,7 @@ def load_dataset(args):
 def build_model(hps, log):
     model = SmartVocoder(hps)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(model)
+    # print(model)
     print('number of parameters:', n_params)
     state = {}
     state['n_params'] = n_params
@@ -188,13 +184,13 @@ def synthesize(model, num_sample):
             wav_name = '{}/generate_{}_{}.wav'.format(
                 sample_path, global_step, batch_idx)
             print('{} seconds'.format(time.time() - timestemp))
-            librosa.output.write_wav(wav_name, wav, sr=22050)
+            librosa.output.write_wav(wav_name, wav, sr=24000)
             print('{} Saved!'.format(wav_name))
 
             wav_orig = x.squeeze().to(torch.device("cpu")).data.numpy()
             wav_orig_name = '{}/orig_{}.wav'.format(
                 sample_path, batch_idx)
-            librosa.output.write_wav(wav_orig_name, wav_orig, sr=22050)
+            librosa.output.write_wav(wav_orig_name, wav_orig, sr=24000)
 
             del x, c, z, q_0, y_gen, wav
 

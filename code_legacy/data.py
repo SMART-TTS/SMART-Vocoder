@@ -6,7 +6,7 @@ from datetime import datetime
 
 max_time_steps = 19200
 upsample_conditional_features = True
-hop_length = 256
+hop_length = 300
 
 
 class KORDataset(Dataset):

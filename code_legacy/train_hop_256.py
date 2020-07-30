@@ -7,7 +7,7 @@ from args_hop_256 import parse_args
 from data_hop_256 import KORDataset, collate_fn, collate_fn_synthesize
 from hps_hop_256 import Hyperparameters
 from model_hop_256 import SmartVocoder
-from utils import actnorm_init, get_logger, mkdir
+from utils_hop_256 import actnorm_init, get_logger, mkdir
 import numpy as np
 import librosa
 import os
@@ -55,7 +55,6 @@ def train(epoch, model, optimizer, scheduler, log_train, args):
 
     epoch_loss = 0.0
     running_loss = [0., 0., 0.]
-    cnt_nfe = 0
     log_interval = args.log_interval
     synth_interval = args.synth_interval
 
@@ -89,10 +88,9 @@ def train(epoch, model, optimizer, scheduler, log_train, args):
             running_loss[2] /= log_interval
             avg_rn_loss = np.array(running_loss)
             avg_time = (time.time() - timestemp) / log_interval
-            avg_steps = cnt_nfe / log_interval
 
-            print('Global Step : {}, [{}, {}] [NLL, Log p(z), Log Det] : {}, avg time: {:0.4f}, steps:{}'
-                  .format(global_step, epoch, epoch_step, avg_rn_loss, avg_time, avg_steps))
+            print('Global Step : {}, [{}, {}] [NLL, Log p(z), Log Det] : {}, avg time: {:0.4f}'
+                  .format(global_step, epoch, epoch_step, avg_rn_loss, avg_time))
 
             state = {}
             state['Global Step'] = global_step
@@ -100,14 +98,12 @@ def train(epoch, model, optimizer, scheduler, log_train, args):
             state['Epoch Step'] = epoch_step
             state['NLL, Log p(z), Log Det'] = running_loss
             state['avg time'] = avg_time
-            state['avg step'] = avg_steps
             state['total time'] = time.time() - start_time
             log_train.write('%s\n' % json.dumps(state))
             log_train.flush()
 
             timestemp = time.time()
             running_loss = [0., 0., 0.]
-            cnt_nfe = 0
 
         if (batch_idx + 1) % synth_interval == 0:
             with torch.no_grad():
@@ -131,7 +127,6 @@ def evaluate(epoch, model, log_eval):
 
     running_loss = [0., 0., 0.]
     epoch_loss = 0.
-    cnt_nfe = 0
     timestemp = time.time()
 
     model.eval()
@@ -152,16 +147,14 @@ def evaluate(epoch, model, log_eval):
     running_loss[2] /= len(test_loader)
     avg_rn_loss = np.array(running_loss)
     avg_time = (time.time() - timestemp) / len(test_loader)
-    avg_steps = cnt_nfe / len(test_loader)
-    print('Global Step : {}, [{}, Eval] [NLL, Log p(z), Log Det] : {}, avg time: {:0.4f}, steps:{}'
-          .format(global_step, epoch, avg_rn_loss, avg_time, avg_steps))
+    print('Global Step : {}, [{}, Eval] [NLL, Log p(z), Log Det] : {}, avg time: {:0.4f}'
+          .format(global_step, epoch, avg_rn_loss, avg_time))
 
     state = {}
     state['Global Step'] = global_step
     state['Epoch'] = epoch
     state['NLL, Log p(z), Log Det'] = running_loss
     state['avg time'] = avg_time
-    state['avg step'] = avg_steps
     state['total time'] = time.time() - start_time
     log_eval.write('%s\n' % json.dumps(state))
     log_eval.flush()
@@ -191,13 +184,13 @@ def synthesize(model, num_sample):
             wav_name = '{}/generate_{}_{}.wav'.format(
                 sample_path, global_step, batch_idx)
             print('{} seconds'.format(time.time() - timestemp))
-            librosa.output.write_wav(wav_name, wav, sr=24000)
+            librosa.output.write_wav(wav_name, wav, sr=22050)
             print('{} Saved!'.format(wav_name))
 
             wav_orig = x.squeeze().to(torch.device("cpu")).data.numpy()
             wav_orig_name = '{}/orig_{}.wav'.format(
                 sample_path, batch_idx)
-            librosa.output.write_wav(wav_orig_name, wav_orig, sr=24000)
+            librosa.output.write_wav(wav_orig_name, wav_orig, sr=22050)
 
             del x, c, z, q_0, y_gen, wav
 

@@ -46,9 +46,7 @@ class WaveNet(nn.Module):
         self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
         
         if pos_group > 1:
-            pos_emb = torch.nn.Embedding(pos_group, pos_group*2)
-            pos_layer = torch.nn.Linear(pos_group*2, 2*n_channels*n_layers)
-            self.pos_layer = torch.nn.utils.weight_norm(pos_layer, name='weight')
+            pos_emb = torch.nn.Embedding(pos_group, 2*n_channels*n_layers)
             self.pos_emb = torch.nn.utils.weight_norm(pos_emb, name='weight')
 
         for i in range(n_layers):
@@ -79,7 +77,6 @@ class WaveNet(nn.Module):
 
         if pos is not None:
             pos = self.pos_emb(pos)
-            pos = self.pos_layer(pos)
             pos = pos.unsqueeze(2)
 
         for i in range(self.n_layers):
@@ -267,7 +264,7 @@ class UpsampleConv(nn.Module):
         super().__init__()
         self.conv_list = nn.ModuleList()
 
-        s_list = [hop_size // (sc_i * (sc ** (n_blocks-1)))] + [sc for _ in range(n_blocks - 1)]
+        s_list = [4, 4, 4]
 
         for s in s_list:
             convt = nn.ConvTranspose2d(1, 1, (3, 2 * s), padding=(1, s // 2), stride=(1, s))
@@ -277,7 +274,7 @@ class UpsampleConv(nn.Module):
             self.conv_list.append(nn.LeakyReLU(0.4))
 
     def forward(self, mel):
-        c_list = []
+        c_list = [mel]
         c = mel.unsqueeze(1)
         for conv in self.conv_list:
             c = conv(c)
@@ -324,16 +321,6 @@ class SmartVocoder(nn.Module):
 
         return ER_block
 
-    def truncate(self, z, mel):
-        hop_size = 256
-        q = self.sqz_scale ** (self.n_ER_blocks - 1)
-        res = mel.shape[2] % q
-        if res != 0:
-            mel = mel[:, :, :-res]
-            z = z[:, :, :-res*hop_size]
-
-        return z, mel
-
     def forward(self, x, mel):
         Bx, Cx, Tx = x.size()
         sc = self.sqz_scale
@@ -347,7 +334,7 @@ class SmartVocoder(nn.Module):
         for i, block in enumerate(self.ER_blocks):
             out, log_det_sum = block(out, c_in, log_det_sum)
 
-            if i != len(self.ER_blocks) -1 :
+            if i != len(self.ER_blocks) -1:
                 B, C, T = out.shape
                 out = out.permute(0,2,1).contiguous().view(B, (C*T)//sc, sc)
                 out = out.permute(0,2,1).contiguous().view(B*sc, T//sc, C)
@@ -362,14 +349,11 @@ class SmartVocoder(nn.Module):
         return log_p, log_det
 
     def reverse(self, z, mel):
-        z, mel = self.truncate(z, mel)
-
         sc = self.sqz_scale
 
         c_list = self.upsample_conv(mel)
         out = self.sqz_layer(z)
 
-        sc = self.sqz_scale
         for i in range(len(self.ER_blocks)-1):
             B, C, T = out.shape
             out = out.permute(0,2,1).contiguous().view(B, (C*T)//sc, sc)
