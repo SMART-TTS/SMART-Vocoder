@@ -68,10 +68,10 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
 
     for batch_idx, (x, c) in enumerate(train_loader):
         global_step += 1
-        with autocast():
-            x, c = x.to(device), c.to(device)
-            log_p, log_det = model(x, c)
-            loss = -(log_p + log_det)
+        # with autocast():
+        x, c = x.to(device), c.to(device)
+        log_p, log_det = model(x, c)
+        loss = -(log_p + log_det)
 
         optimizer.zero_grad()
         scaler.scale(loss).backward()
