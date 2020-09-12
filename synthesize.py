@@ -1,11 +1,11 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.distributions.normal import Normal
-from args_hop_256 import parse_args
-from data_hop_256 import KORDataset, collate_fn_synthesize
-from hps_hop_256 import Hyperparameters
-from model_hop_256 import SmartVocoder
-from utils_hop_256 import mkdir
+from args import parse_args
+from data import KORDataset, collate_fn_synth
+from hps import Hyperparameters
+from model_300 import SmartVocoder
+from utils import mkdir
 import librosa
 import os
 import time
@@ -14,10 +14,11 @@ torch.backends.cudnn.benchmark = False
 
 
 def load_dataset(args):
+    collate_fn2 = lambda batch: collate_fn_synth(batch, args.hop_length)
     test_dataset = KORDataset(args.data_path, False, 0.1)
-    synth_loader = DataLoader(test_dataset, batch_size=1, collate_fn=collate_fn_synthesize,
+    synth_loader = DataLoader(test_dataset, batch_size=1, collate_fn=collate_fn2,
                             num_workers=args.num_workers, pin_memory=True)
-
+    print('sr', args.sr)
     return synth_loader
 
 

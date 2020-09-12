@@ -34,6 +34,7 @@ class KORDataset(Dataset):
         with open(meta, "rb") as f:
             lines = f.readlines()
         l = lines[0].decode("utf-8").split("|")
+
         assert len(l) == 3
         self.lengths = list(
             map(lambda l: int(l.decode("utf-8").split("|")[2]), lines))
