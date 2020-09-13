@@ -22,6 +22,7 @@ def build_from_path(in_dir, out_dir, csv_path, hop_length, num_workers=1):
             parts = line.split('_')
             wav_path = os.path.join(in_dir, parts[0], parts[1], 'wav_16', '%s.wav' % parts[2])
             save_dir = os.path.join(parts[0], parts[1])
+            # _process_utterance(out_dir, save_dir, index, wav_path, hop_length)
             futures.append(executor.submit(
                 partial(_process_utterance, out_dir, save_dir, index, wav_path, hop_length)))
             index += 1
@@ -42,17 +43,17 @@ def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
 
     wav, _ = librosa.load(wav_path, sr=sr)
     wav = wav / (np.abs(wav)+0.02)
-    wav, trim_idx = librosa.effects.trim(y, top_db=20, frame_length=800, hop_length=200)
-    wav = wav[max(trim_idx[0]-4800,0):min(trim_idx[1]+4800,len(wav))]
+    wav, _ = librosa.effects.trim(wav, top_db=20, frame_length=800, hop_length=200)
+    # wav = wav[max(trim_idx[0]-4800,0):min(trim_idx[1]+4800,len(wav))]
     out = wav
-    wav = np.append(wav[0], wav[1:] - hp.preemphasis * wav[:-1])
+    wav = np.append(wav[0], wav[1:] - preemphasis * wav[:-1])
     linear = librosa.stft(y=wav,
                         n_fft=fft_size,
                         hop_length=hop_length,
                         win_length=win_length)
-    mag = np.abs(linear)  # (1+n_fft//2, T)
+    mag = np.abs(linear)
     mel_basis = librosa.filters.mel(sr, fft_size, n_mels)
-    mel = np.dot(mel_basis, mag)  # (n_mels, t)
+    mel = np.dot(mel_basis, mag).T  # (t, n_mels)
     mel = 20 * np.log10(np.maximum(1e-5, mel))
     mel_spectrogram = np.clip((mel + max_db - ref_db) / max_db, 1e-8, 1)
 
@@ -63,13 +64,13 @@ def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
     # zero pad for quantized signal
     out = np.pad(out, (pad_l, pad_r), mode="constant", constant_values=0)
     N = mel_spectrogram.shape[0]
-    assert len(out) >= N * hop_length
+    assert len(out) >= N * hop_length, "len(out) >= N  * hop_length"
 
     # time resolution adjustment
     # ensure length of raw audio is multiple of hop_size so that we can use
     # transposed convolution to upsample
     out = out[:N * hop_length]
-    assert len(out) % hop_length == 0
+    assert len(out) % hop_length == 0, "len(out) `%` hop_length == 0"
 
     timesteps = len(out)
 
