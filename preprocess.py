@@ -28,35 +28,33 @@ def build_from_path(in_dir, out_dir, csv_path, hop_length, num_workers=1):
     return [future.result() for future in futures]
 
 def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
-    if hop_length == 300:
-        sr = 24000
-        fft_size = 2048
-        win_length = 1200
-
-    elif hop_length == 256:
+    if hop_length == 256:
         sr = 22050
-        fft_size = 1024
+        fft_size = 2048
         win_length = 1024
+        preemphasis = 0.97
+        n_mels = 80
+        max_db = 100
+        ref_db = 20
     else:
-        print('hop_length must be 300 or 256.')
-
-    window = 'hann'
-    num_mels = 80
-    fmin = 80
-    fmax = 7600
-    eps = 1e-10
+        import sys
+        sys.exit('hop_length should be 256 !')
 
     wav, _ = librosa.load(wav_path, sr=sr)
-    wav_trim, _ = librosa.effects.trim(wav, top_db=35)
-    out = wav_trim / np.abs(wav_trim).max() * 0.999
-    x_stft = librosa.stft(out, n_fft=fft_size, hop_length=hop_length,
-                          win_length=win_length, window=window, pad_mode="reflect")
-    spc = np.abs(x_stft).T  # (#frames, #bins)
-
-    # get mel basis
-    mel_basis = librosa.filters.mel(sr, fft_size, num_mels, fmin, fmax)
-
-    mel_spectrogram = np.log10(np.maximum(eps, np.dot(spc, mel_basis.T)))
+    wav = wav / (np.abs(wav)+0.02)
+    wav, trim_idx = librosa.effects.trim(y, top_db=20, frame_length=800, hop_length=200)
+    wav = wav[max(trim_idx[0]-4800,0):min(trim_idx[1]+4800,len(wav))]
+    out = wav
+    wav = np.append(wav[0], wav[1:] - hp.preemphasis * wav[:-1])
+    linear = librosa.stft(y=wav,
+                        n_fft=fft_size,
+                        hop_length=hop_length,
+                        win_length=win_length)
+    mag = np.abs(linear)  # (1+n_fft//2, T)
+    mel_basis = librosa.filters.mel(sr, fft_size, n_mels)
+    mel = np.dot(mel_basis, mag)  # (n_mels, t)
+    mel = 20 * np.log10(np.maximum(1e-5, mel))
+    mel_spectrogram = np.clip((mel + max_db - ref_db) / max_db, 1e-8, 1)
 
     pad = (out.shape[0] // hop_length + 1) * hop_length - out.shape[0]
     pad_l = pad // 2
@@ -98,19 +96,13 @@ def preprocess(in_dir, out_dir, csv_path, hop_length, num_workers):
 
 
 def write_metadata(metadata, out_dir, hop_length):
+    if hop_length == 256:
+        sr = 22050
     random.shuffle(metadata)
     with open(os.path.join(out_dir, 'train.txt'), 'w', encoding='utf-8') as f:
         for m in metadata:
             f.write('|'.join([str(x) for x in m]) + '\n')
-    frames = sum([m[2] for m in metadata])
-
-    if hop_length == 300:
-        sr = 24000
-    elif hop_length == 256:
-        sr = 22050
-    else:
-        print('hop_length must be 300 or 256.')
-        
+    frames = sum([m[2] for m in metadata])        
     hours = frames / sr / 3600
     print('Wrote %d utterances, %d time steps (%.2f hours)' % (len(metadata), frames, hours))
 
@@ -120,7 +112,7 @@ if __name__ == "__main__":
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--in_dir', '-i', type=str, default='datasets', help='In Directory')
     parser.add_argument('--csv_path', '-ci', type=str, default='datasets/metadata_full.csv', help='Metadata path')
-    parser.add_argument('--hop_length', '-hl', type=int, default=300, help='Hop size')
+    parser.add_argument('--hop_length', '-hl', type=int, default=256, help='Hop size')
     parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed', help='Out Directory')
     args = parser.parse_args()
 
