@@ -42,7 +42,7 @@ def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
         sys.exit('hop_length should be 256 !')
 
     wav, _ = librosa.load(wav_path, sr=sr)
-    wav = wav / (np.abs(wav)+0.02)
+    wav = wav / (max(np.abs(wav))+0.02)
     wav, _ = librosa.effects.trim(wav, top_db=20, frame_length=800, hop_length=200)
     # wav = wav[max(trim_idx[0]-4800,0):min(trim_idx[1]+4800,len(wav))]
     out = wav
@@ -114,11 +114,11 @@ if __name__ == "__main__":
     parser.add_argument('--in_dir', '-i', type=str, default='datasets', help='In Directory')
     parser.add_argument('--csv_path', '-ci', type=str, default='datasets/metadata_full.csv', help='Metadata path')
     parser.add_argument('--hop_length', '-hl', type=int, default=256, help='Hop size')
-    parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed', help='Out Directory')
+    parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed_bj2', help='Out Directory')
     args = parser.parse_args()
 
 
-    num_workers = cpu_count() - 10
+    num_workers = cpu_count() - 15
     out_dir = args.out_dir + '_hop_' + str(args.hop_length)
     print('<--- Preprocess start --->')
     preprocess(args.in_dir, out_dir, args.csv_path, args.hop_length, num_workers)

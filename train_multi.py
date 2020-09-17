@@ -4,7 +4,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.distributions.normal import Normal
 from torch.cuda.amp import GradScaler, autocast
-from args_hop_256 import parse_args
+from args import parse_args
 from data import KORDataset, collate_fn_tr, collate_fn_synth
 from hps import Hyperparameters
 from model import SmartVocoder
@@ -68,10 +68,10 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
 
     for batch_idx, (x, c) in enumerate(train_loader):
         global_step += 1
-        # with autocast():
-        x, c = x.to(device), c.to(device)
-        log_p, log_det = model(x, c)
-        loss = -(log_p + log_det)
+        with autocast():
+            x, c = x.to(device), c.to(device)
+            log_p, log_det = model(x, c)
+            loss = -(log_p + log_det)
 
         optimizer.zero_grad()
         scaler.scale(loss).backward()
@@ -250,6 +250,13 @@ def load_checkpoint(step, model, optimizer, scheduler):
 if __name__ == "__main__":
     global global_step
     global start_time
+
+    ngpus_per_node = torch.cuda.device_count()
+    if args.distributed:
+        args.world_size = ngpus_per_node * args.world_size
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(save_dir, ngpus_per_node, args))
+    else:
+        main_worker(args.gpu, save_dir, ngpus_per_node, args)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args = parse_args()
