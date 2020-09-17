@@ -6,15 +6,31 @@ def parse_args():
     parser.add_argument('--model_name', type=str, default='SmartVocoder', help='Model name')
     parser.add_argument('--load_step', type=int, default=0, help='Load step')
     parser.add_argument('--epochs', '-e', type=int, default=5000, help='Number of epochs to train.')
-    parser.add_argument('--bsz', '-b', type=int, default=8, help='Batch size')
-    parser.add_argument('--bsz_init', '-bi', type=int, default=256, help='Batch size for initializing actnorm')
+    parser.add_argument('--bsz', '-b', type=int, default=24, help='Batch size')
+    parser.add_argument('--bsz_init', '-bi', type=int, default=128, help='Batch size for initializing actnorm')
     parser.add_argument('--lr', type=float, default=5e-4, help='Learning rate')
-    parser.add_argument('--step_size', type=int, default=200000, help='Step size of optimizer scheduler')
+    parser.add_argument('--step_size', type=int, default=50000, help='Step size of optimizer scheduler')
     parser.add_argument('--gamma', type=float, default=0.5, help='Decay ratio of learning rate')
-    parser.add_argument('--num_workers', type=int, default=1, help='Number of workers')
-    parser.add_argument('--log_interval', type=int, default=200, help='Logging interval during training')
-    parser.add_argument('--synth_interval', type=int, default=750, help='Sampling interval during training')
+    parser.add_argument('--num_workers', type=int, default=0, help='Number of workers')
+    parser.add_argument('--log_interval', type=int, default=100, help='Logging interval during training')
+    parser.add_argument('--synth_interval', type=int, default=250, help='Sampling interval during training')
     parser.add_argument('--num_sample', type=int, default=1, help='Number of samples to synthesize during training')
+
+    parser.add_argument('--world_size', default=1, type=int,
+                        help='Number of distributed nodes.')
+    parser.add_argument('--dist_url', default='tcp://127.0.0.1:9998', type=str,
+                        help='url used to set up distributed training')
+    parser.add_argument('--dist_backend', default='nccl', type=str,
+                        help='distributed backend')
+    parser.add_argument('--distributed', action='store_true',
+                        help='Use multi-processing distributed training to launch '
+                             'N processes per node, which has N GPUs. This is the '
+                             'fastest way to use PyTorch for either single node or '
+                             'multi node data parallel training')
+    parser.add_argument('--rank', default=0, type=int,
+                        help='node rank for distributed training')
+    parser.add_argument('--gpu', default=None, type=int,
+                        help='GPU id to use. None means using all available GPUs.')
 
     parser.add_argument('--max_time_steps', type=int, default=16000, help='Maximum time steps of audio for training')
     parser.add_argument('--sr', type=int, default=22050, help='Sampling rate')

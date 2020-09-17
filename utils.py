@@ -2,9 +2,9 @@ import torch
 import os
 
 
-def actnorm_init(train_loader, model, device):
+def actnorm_init(train_loader, model, gpu):
     x_seed, c_seed = next(iter(train_loader))
-    x_seed, c_seed = x_seed.to(device), c_seed.to(device)
+    x_seed, c_seed = x_seed.cuda(gpu, non_blocking=True), c_seed.cuda(gpu, non_blocking=True)
     with torch.no_grad():
         model(x_seed, c_seed)
 

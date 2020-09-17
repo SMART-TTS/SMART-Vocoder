@@ -4,7 +4,9 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torch.distributions.normal import Normal
 from torch.cuda.amp import GradScaler, autocast
-from args_hop_256 import parse_args
+import torch.distributed as dist
+import torch.multiprocessing as mp
+from args_BIG import parse_args
 from data import KORDataset, collate_fn_tr, collate_fn_synth
 from hps import Hyperparameters
 from model import SmartVocoder
@@ -20,16 +22,20 @@ import gc
 torch.backends.cudnn.benchmark = True
 np.set_printoptions(precision=4)
 
-
 def load_dataset(args):
     train_dataset = KORDataset(args.data_path, True, 0.1)
     test_dataset = KORDataset(args.data_path, False, 0.1)
 
+    if args.distributed:
+        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+    else:
+        train_sampler = None
+
     collate_fn1 = lambda batch: collate_fn_tr(batch, args.max_time_steps, args.hop_length)
     collate_fn2 = lambda batch: collate_fn_synth(batch, args.hop_length)
 
-    train_loader = DataLoader(train_dataset, batch_size=args.bsz, shuffle=True, collate_fn=collate_fn1,
-                              num_workers=args.num_workers, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.bsz, shuffle=(train_sampler is None), collate_fn=collate_fn1,
+                              num_workers=args.num_workers, pin_memory=True, sampler=train_sampler)
     test_loader = DataLoader(test_dataset, batch_size=args.bsz, collate_fn=collate_fn1,
                              num_workers=args.num_workers, pin_memory=True)
     synth_loader = DataLoader(test_dataset, batch_size=1, collate_fn=collate_fn2,
@@ -44,17 +50,17 @@ def load_dataset(args):
 def build_model(hps, log):
     model = SmartVocoder(hps)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    # print(model)
     print('number of parameters:', n_params)
-    state = {}
-    state['n_params'] = n_params
-    log.write('%s\n' % json.dumps(state))
-    log.flush()
+    if log is not None:
+        state = {}
+        state['n_params'] = n_params
+        log.write('%s\n' % json.dumps(state))
+        log.flush()
 
     return model
 
 
-def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
+def train(gpu, epoch, train_loader, synth_loader, sample_path, model, optimizer, scaler, scheduler, log_train, args):
     global global_step
     global start_time
 
@@ -68,18 +74,18 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
 
     for batch_idx, (x, c) in enumerate(train_loader):
         global_step += 1
-        with autocast():
-            x, c = x.to(device), c.to(device)
-            log_p, log_det = model(x, c)
-            loss = -(log_p + log_det)
+        # with autocast():
+        x, c = x.cuda(gpu, non_blocking=True), c.cuda(gpu, non_blocking=True)
+        log_p, log_det = model(x, c)
+        loss = -(log_p + log_det)
 
         optimizer.zero_grad()
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        # loss.backward()
-        # nn.utils.clip_grad_norm_(model.parameters(), 1.)
-        # optimizer.step()
+        # scaler.scale(loss).backward()
+        # scaler.step(optimizer)
+        # scaler.update()
+        loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), 1.)
+        optimizer.step()
         scheduler.step()
 
         running_loss[0] += loss.item()
@@ -96,29 +102,30 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
             avg_rn_loss = np.array(running_loss)
             avg_time = (time.time() - timestemp) / log_interval
 
-            print('Global Step : {}, [{}, {}] [NLL, Log p(z), Log Det] : {}, avg time: {:0.4f}'
-                  .format(global_step, epoch, epoch_step, avg_rn_loss, avg_time))
+            print('[Rank [{}] Global Step : {}, [{}, {}] [NLL, Log p(z), Log Det] : {}, avg time: {:0.4f}'
+                  .format(gpu, global_step, epoch, epoch_step, avg_rn_loss, avg_time))
 
-            state = {}
-            state['Global Step'] = global_step
-            state['Epoch'] = epoch
-            state['Epoch Step'] = epoch_step
-            state['NLL, Log p(z), Log Det'] = running_loss
-            state['avg time'] = avg_time
-            state['total time'] = time.time() - start_time
-            log_train.write('%s\n' % json.dumps(state))
-            log_train.flush()
+
+            if log_train is not None:
+                state = {}
+                state['Global Step'] = global_step
+                state['Epoch'] = epoch
+                state['Epoch Step'] = epoch_step
+                state['NLL, Log p(z), Log Det'] = running_loss
+                state['avg time'] = avg_time
+                state['total time'] = time.time() - start_time
+                log_train.write('%s\n' % json.dumps(state))
+                log_train.flush()
 
             timestemp = time.time()
             running_loss = [0., 0., 0.]
 
-        if (batch_idx + 1) % synth_interval == 0:
+        if (batch_idx + 1) % synth_interval == 0 and log_train is not None:
             with torch.no_grad():
-                synthesize(model, args.num_sample, args.sr)
+                synthesize(gpu, sample_path, synth_loader, model, args.num_sample, args.sr)
             model.train()
             
         del x, c, log_p, log_det, loss
-
     del running_loss
     gc.collect()
 
@@ -127,7 +134,7 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
     return epoch_loss / len(train_loader)
 
 
-def evaluate(epoch, model, log_eval):
+def evaluate(gpu, epoch, test_loader, model, log_eval):
     global global_step
     global start_time
 
@@ -138,7 +145,7 @@ def evaluate(epoch, model, log_eval):
     model.eval()
     for _, (x, c) in enumerate(test_loader):
         with autocast():
-            x, c = x.to(device), c.to(device)
+            x, c = x.cuda(gpu, non_blocking=True), c.cuda(gpu, non_blocking=True)
             log_p, log_det = model(x, c)
             loss = -(log_p + log_det)
 
@@ -157,14 +164,15 @@ def evaluate(epoch, model, log_eval):
     print('Global Step : {}, [{}, Eval] [NLL, Log p(z), Log Det] : {}, avg time: {:0.4f}'
           .format(global_step, epoch, avg_rn_loss, avg_time))
 
-    state = {}
-    state['Global Step'] = global_step
-    state['Epoch'] = epoch
-    state['NLL, Log p(z), Log Det'] = running_loss
-    state['avg time'] = avg_time
-    state['total time'] = time.time() - start_time
-    log_eval.write('%s\n' % json.dumps(state))
-    log_eval.flush()
+    if log_eval is not None:
+        state = {}
+        state['Global Step'] = global_step
+        state['Epoch'] = epoch
+        state['NLL, Log p(z), Log Det'] = running_loss
+        state['avg time'] = avg_time
+        state['total time'] = time.time() - start_time
+        log_eval.write('%s\n' % json.dumps(state))
+        log_eval.flush()
 
     del running_loss
 
@@ -174,15 +182,15 @@ def evaluate(epoch, model, log_eval):
     return epoch_loss
 
 
-def synthesize(model, num_sample, sr):
+def synthesize(gpu, sample_path, synth_loader, model, num_sample, sr):
     global global_step
 
     model.eval()
     for batch_idx, (x, c) in enumerate(synth_loader):
         if batch_idx < num_sample:
-            x, c = x.to(device), c.to(device)
+            x, c = x.cuda(gpu, non_blocking=True), c.cuda(gpu, non_blocking=True)
             q_0 = Normal(x.new_zeros(x.size()), x.new_ones(x.size()))
-            z = q_0.sample()
+            z = q_0.sample().cuda(gpu, non_blocking=True)
             timestemp = time.time()
             with torch.no_grad():
                 y_gen = model.reverse(z, c).squeeze()
@@ -205,7 +213,7 @@ def synthesize(model, num_sample, sr):
             break
 
 
-def save_checkpoint(model, optimizer, scaler, scheduler, global_step, global_epoch):
+def save_checkpoint(save_path, model, optimizer, scaler, scheduler, global_step, global_epoch):
     checkpoint_path = os.path.join(
         save_path, "checkpoint_step{:09d}.pth".format(global_step))
     optimizer_state = optimizer.state_dict()
@@ -219,7 +227,7 @@ def save_checkpoint(model, optimizer, scaler, scheduler, global_step, global_epo
                 "global_epoch": global_epoch}, checkpoint_path)
 
 
-def load_checkpoint(step, model, optimizer, scheduler):
+def load_checkpoint(step, load_path, model, optimizer, scheduler):
     checkpoint_path = os.path.join(
         load_path, "checkpoint_step{:09d}.pth".format(step))
     print("Load checkpoint from: {}".format(checkpoint_path))
@@ -246,63 +254,114 @@ def load_checkpoint(step, model, optimizer, scheduler):
 
     return model, optimizer, scheduler, g_epoch, g_step
 
-
-if __name__ == "__main__":
+def main_worker(gpu, ngpus_per_node, args):
     global global_step
     global start_time
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    args = parse_args()
-    sample_path, save_path, load_path, log_path = mkdir(args)
-    log, log_train, log_eval = get_logger(log_path, args.model_name)
-    train_loader, test_loader, synth_loader = load_dataset(args)
-    hps = Hyperparameters(args)
-    model = build_model(hps, log)
-    model.to(device)
+    args.gpu = gpu
+    if args.gpu is not None:
+        print("Use GPU: {} for training".format(args.gpu))
 
+    if args.distributed:
+        if args.dist_url == "env://" and args.rank == -1:
+            args.rank = int(os.environ["RANK"])
+        if args.distributed:
+            args.rank = args.rank * ngpus_per_node + gpu
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+                                world_size=args.world_size, rank=args.rank)
+                   
+    hps = Hyperparameters(args)
+    sample_path, save_path, load_path, log_path = mkdir(args)
+    if not args.distributed or (args.rank % ngpus_per_node == 0):
+        log, log_train, log_eval = get_logger(log_path, args.model_name)
+    else:
+        log, log_train, log_eval = None, None, None
+    model = build_model(hps, log)
+    if args.distributed:  # Multiple processes, single GPU per process
+        if args.gpu is not None:
+            def _transform_(m):
+                return nn.parallel.DistributedDataParallel(
+                    m, device_ids=[args.gpu], output_device=args.gpu, check_reduction=True)
+
+            torch.cuda.set_device(args.gpu)
+            model.cuda(args.gpu)
+            model.multi_gpu_wrapper(_transform_)
+            args.bsz = int(args.bsz / ngpus_per_node)
+            args.workers = 0
+        else:
+            assert 0, "DistributedDataParallel constructor should always set the single device scope"
+    elif args.gpu is not None:  # Single process, single GPU per process
+        torch.cuda.set_device(args.gpu)
+        model = model.cuda(args.gpu)
+    else:  # Single process, multiple GPUs per process
+        def _transform_(m):
+            return nn.DataParallel(m)
+        model = model.cuda()
+        model.multi_gpu_wrapper(_transform_)
+
+
+    train_loader, test_loader, synth_loader = load_dataset(args)
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     scaler = GradScaler()
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
-
     state = {k: v for k, v in args._get_kwargs()}
 
     if args.load_step == 0:
         # new model
         global_epoch = 0
         global_step = 0
-        actnorm_init(train_loader, model, device)
-
+        actnorm_init(train_loader, model, args.gpu)
     else:
         # saved model
-        model, optimizer, scheduler, global_epoch, global_step = load_checkpoint(args.load_step, model, optimizer, scheduler)
-        log.write('\n ! --- load the model and continue training --- ! \n')
-        log_train.write('\n ! --- load the model and continue training --- ! \n')
-        log_eval.write('\n ! --- load the model and continue training --- ! \n')
-        log.flush()
-        log_train.flush()
-        log_eval.flush()
+        model, optimizer, scheduler, global_epoch, global_step = load_checkpoint(args.load_step, load_path, model, optimizer, scheduler)
+        if log is not None:
+            log.write('\n ! --- load the model and continue training --- ! \n')
+            log_train.write('\n ! --- load the model and continue training --- ! \n')
+            log_eval.write('\n ! --- load the model and continue training --- ! \n')
+            log.flush()
+            log_train.flush()
+            log_eval.flush()
 
     start_time = time.time()
     dateTime = datetime.datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
     print('training starts at ', dateTime)
 
     for epoch in range(global_epoch + 1, args.epochs + 1):
-        training_epoch_loss = train(epoch, model, optimizer, scaler, scheduler, log_train, args)
+        training_epoch_loss = train(args.gpu, epoch, train_loader, synth_loader, sample_path, model, optimizer, scaler, scheduler, log_train, args)
 
         with torch.no_grad():
-            eval_epoch_loss = evaluate(epoch, model, log_eval)
+            eval_epoch_loss = evaluate(args.gpu, epoch, test_loader, model, log_eval)
 
-        state['training_loss'] = training_epoch_loss
-        state['eval_loss'] = eval_epoch_loss
-        state['epoch'] = epoch
-        log.write('%s\n' % json.dumps(state))
-        log.flush()
-        save_checkpoint(model, optimizer, scaler, scheduler, global_step, epoch)
-        print('Epoch {} Model Saved! Loss : {:.4f}'.format(epoch, eval_epoch_loss))
-        with torch.no_grad():
-            synthesize(model, args.num_sample, args.sr)
+        if log is not None:
+            state['training_loss'] = training_epoch_loss
+            state['eval_loss'] = eval_epoch_loss
+            state['epoch'] = epoch
+            log.write('%s\n' % json.dumps(state))
+            log.flush()
+            
+        if not args.distributed or (args.rank % ngpus_per_node == 0):
+            save_checkpoint(save_path, model, optimizer, scaler, scheduler, global_step, epoch)
+            print('Epoch {} Model Saved! Loss : {:.4f}'.format(epoch, eval_epoch_loss))
+            with torch.no_grad():
+                synthesize(args.gpu, sample_path, synth_loader, model, args.num_sample, args.sr)
         gc.collect()
 
-    log_train.close()
-    log_eval.close()
-    log.close()
+    if log is not None:
+        log_train.close()
+        log_eval.close()
+        log.close()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    
+    if args.dist_url == "env://" and args.world_size == -1:
+        args.world_size = int(os.environ["WORLD_SIZE"])
+
+    ngpus_per_node = torch.cuda.device_count()
+    if args.distributed:
+        args.world_size = ngpus_per_node * args.world_size
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+    else:
+        main_worker(args.gpu, ngpus_per_node, args)
+
