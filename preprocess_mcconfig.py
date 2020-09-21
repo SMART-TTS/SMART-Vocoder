@@ -20,7 +20,9 @@ def build_from_path(in_dir, out_dir, csv_path, hop_length, num_workers=1):
             last_idx = line.find('|')
             line = line[:last_idx]
             parts = line.split('_')
-            wav_path = os.path.join(in_dir, parts[0], parts[1], 'wav_16', '%s.wav' % parts[2])
+            wav_path = os.path.join(in_dir, parts[0], parts[1], 'wav_orig', '%s.wav' % parts[2])
+            if not os.path.exists(wav_path):
+                wav_path = os.path.join(in_dir, parts[0], parts[1], 'wav_22', '%s.wav' % parts[2])
             save_dir = os.path.join(parts[0], parts[1])
             # _process_utterance(out_dir, save_dir, index, wav_path, hop_length)
             futures.append(executor.submit(
@@ -117,7 +119,7 @@ if __name__ == "__main__":
 
 
     num_workers = cpu_count() - 15
-    out_dir = args.out_dir + '_hop_' + str(args.hop_length) + '_mcconfig'
+    out_dir = args.out_dir + '_hop_' + str(args.hop_length) + '_mcconfig2'
     print('<--- Preprocess start --->')
     preprocess(args.in_dir, out_dir, args.csv_path, args.hop_length, num_workers)
     print('<--- Preprocess done --->')
