@@ -5,7 +5,7 @@ from args_BIG_mcconfig import parse_args
 from data import KORDataset, collate_fn_synth
 from hps import Hyperparameters
 from model import SmartVocoder
-from utils import mkdir
+from utils_mulaw import mkdir, mu_law
 import librosa
 import os
 import time
@@ -35,16 +35,31 @@ def synthesize(model, temp, num_sample):
     for batch_idx, (x, c) in enumerate(synth_loader):
         if (batch_idx % 40) == 0:
             x, c = x.to(device), c.to(device)
-            exp_c = c.exp()
             print('x', x)
             print('x max', x.max())
             print('x min', x.min())
             print('c', c)
             print('c max', c.max())
             print('c min', c.min())
-            print('exp_c', exp_c)
-            print('exp_c max', exp_c.max())
-            print('exp_c min', exp_c.min())
+            xm = mu_law(x)
+            print('xm', xm)
+            print('xm max', xm.max())
+            print('xm min', xm.min())
+
+            x = x.squeeze()
+            xm = xm.squeeze()
+
+            wav = x.to(torch.device("cpu")).data.numpy()
+            wav_name = '{}/{}_orig.wav'.format(sample_path, batch_idx)
+            torch.cuda.synchronize()
+            librosa.output.write_wav(wav_name, wav, sr=22050)
+            print('{} Saved!'.format(wav_name))
+
+            wav = xm.to(torch.device("cpu")).data.numpy()
+            wav_name = '{}/{}_mulaw.wav'.format(sample_path, batch_idx)
+            torch.cuda.synchronize()
+            librosa.output.write_wav(wav_name, wav, sr=22050)
+            print('{} Saved!'.format(wav_name))
 
             if batch_idx > 5* 40:
                 break

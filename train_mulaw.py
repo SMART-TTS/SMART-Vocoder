@@ -10,7 +10,7 @@ from args_BIG_mcconfig import parse_args
 from data import KORDataset, collate_fn_tr, collate_fn_synth
 from hps import Hyperparameters
 from model import SmartVocoder
-from utils import actnorm_init, get_logger, mkdir
+from utils_mulaw import actnorm_init, get_logger, mkdir, mu_law
 import numpy as np
 import librosa
 import os
@@ -76,6 +76,7 @@ def train(gpu, epoch, train_loader, synth_loader, sample_path, model, optimizer,
         global_step += 1
         # with autocast():
         x, c = x.cuda(gpu, non_blocking=True), c.cuda(gpu, non_blocking=True)
+        x_mulaw = x.sign()
         log_p, log_det = model(x, c)
         loss = -(log_p + log_det)
 
