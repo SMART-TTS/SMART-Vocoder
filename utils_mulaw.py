@@ -1,6 +1,9 @@
 import torch
 import os
 
+def mu_law(x, reverse=False):
+    mu = torch.tensor(4.)
+    return x.sign() * (1 + mu * x.abs()).log() / torch.log(1+ mu)
 
 def actnorm_init(train_loader, model, gpu):
     x_seed, c_seed = next(iter(train_loader))
@@ -32,7 +35,7 @@ def mkdir(args, synthesize=False, test=False):
     set_desc = 'SMART-Vocoder_hop_' + str(args.hop_length)
     if args.n_channels >= 128:
         set_desc = set_desc + '_BIG'
-    set_desc = set_desc + '_mcconfig'
+    set_desc = set_desc + '_mcconfig_mulaw'
 
     if synthesize:
         sample_path = 'synthesize/' + args.model_name + '/' + set_desc +'/temp_' + str(args.temp)
