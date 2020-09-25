@@ -6,11 +6,11 @@ from torch.distributions.normal import Normal
 from torch.cuda.amp import GradScaler, autocast
 import torch.distributed as dist
 import torch.multiprocessing as mp
-from args_BIG_mcconfig import parse_args
+from args_BIG_improved_mcconfig import parse_args
 from data import KORDataset, collate_fn_tr, collate_fn_synth
 from hps import Hyperparameters
-from model import SmartVocoder
-from utils_mulaw import actnorm_init, get_logger, mkdir, mu_law
+from model_improved import SmartVocoder
+from utils_softflow_mulaw import actnorm_init, get_logger, mkdir, mu_law
 import numpy as np
 import librosa
 import os
@@ -76,8 +76,14 @@ def train(gpu, epoch, train_loader, synth_loader, sample_path, model, optimizer,
         global_step += 1
         # with autocast():
         x, c = x.cuda(gpu, non_blocking=True), c.cuda(gpu, non_blocking=True)
-        xm = mu_law(x)
-        log_p, log_det = model(xm, c)
+
+        B, C, T = x.shape
+        std = (args.std_max - args.std_min) * torch.rand_like(x[:,:,0]).view(B,C,1) + args.std_min
+        eps = torch.randn_like(x) * std
+        std_in = std / args.std_max * args.std_scale
+        x_noisy = x + eps
+        xm = mu_law(x_noisy)
+        log_p, log_det = model(xm, c, std_in)
         loss = -(log_p + log_det)
 
         optimizer.zero_grad()
@@ -147,8 +153,9 @@ def evaluate(gpu, epoch, test_loader, model, log_eval):
     for _, (x, c) in enumerate(test_loader):
         with autocast():
             x, c = x.cuda(gpu, non_blocking=True), c.cuda(gpu, non_blocking=True)
+            std_in = torch.zeros_like(x[:,:,:1])
             xm = mu_law(x)
-            log_p, log_det = model(xm, c)
+            log_p, log_det = model(xm, c, std_in)
             loss = -(log_p + log_det)
 
         running_loss[0] += loss.item()
@@ -195,7 +202,8 @@ def synthesize(gpu, sample_path, synth_loader, model, num_sample, sr):
             z = q_0.sample().cuda(gpu, non_blocking=True)
             timestemp = time.time()
             with torch.no_grad():
-                y_gen_m = model.reverse(z, c).squeeze()
+                std_in = torch.zeros_like(z[:,:,:1])
+                y_gen_m = model.reverse(z, c, std_in).squeeze()
                 y_gen = mu_law(y_gen_m, reverse=True) 
 
             wav = y_gen.to(torch.device("cpu")).data.numpy()
@@ -234,12 +242,12 @@ def load_checkpoint(step, load_path, model, optimizer, scheduler):
     checkpoint_path = os.path.join(
         load_path, "checkpoint_step{:09d}.pth".format(step))
     print("Load checkpoint from: {}".format(checkpoint_path))
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path)
 
     # generalized load procedure for both single-gpu and DataParallel models
     # https://discuss.pytorch.org/t/solved-keyerror-unexpected-key-module-encoder-embedding-weight-in-state-dict/1686/3
     try:
-        model.load_state_dict(checkpoint["state_dict"], strict=True)
+        model.load_state_dict(checkpoint["state_dict"])
     except RuntimeError:
         print("INFO: this model is trained with DataParallel. Creating new state_dict without module...")
         state_dict = checkpoint["state_dict"]

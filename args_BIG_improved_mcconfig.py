@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument('--hop_length', type=int, default=256, help='Hop length')
 
     parser.add_argument('--std_min', type=float, default=0.0)
-    parser.add_argument('--std_max', type=float, default=0.01)
+    parser.add_argument('--std_max', type=float, default=0.005)
     parser.add_argument('--test_std_n', type=float, default=0.0)
     parser.add_argument('--test_std_z', type=float, default=1.0)
     parser.add_argument('--std_scale', type=float, default=2)
