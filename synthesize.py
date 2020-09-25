@@ -1,11 +1,11 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.distributions.normal import Normal
-from args_BIG_mcconfig import parse_args
+from args import parse_args
 from data import KORDataset, collate_fn_synth
 from hps import Hyperparameters
-from model import SmartVocoder
-from utils_mulaw import mkdir, mu_law
+from model_300 import SmartVocoder
+from utils import mkdir
 import librosa
 import os
 import time
@@ -35,49 +35,21 @@ def synthesize(model, temp, num_sample):
     for batch_idx, (x, c) in enumerate(synth_loader):
         if (batch_idx % 40) == 0:
             x, c = x.to(device), c.to(device)
-            print('x', x)
-            print('x max', x.max())
-            print('x min', x.min())
-            print('c', c)
-            print('c max', c.max())
-            print('c min', c.min())
-            xm = mu_law(x)
-            print('xm', xm)
-            print('xm max', xm.max())
-            print('xm min', xm.min())
-
-            x = x.squeeze()
-            xm = xm.squeeze()
-
-            wav = x.to(torch.device("cpu")).data.numpy()
-            wav_name = '{}/{}_orig.wav'.format(sample_path, batch_idx)
+            q_0 = Normal(x.new_zeros(x.size()), x.new_ones(x.size()))
+            z = q_0.sample()
+            # a = torch.FloatTensor(z.shape).uniform_(temp, 1.0).to(device)
+            z = z * temp
             torch.cuda.synchronize()
+            timestemp = time.time()
+            with torch.no_grad():
+                y_gen = model.reverse(z, c).squeeze()
+
+            wav = y_gen.to(torch.device("cpu")).data.numpy()
+            wav_name = '{}/{}.wav'.format(sample_path, batch_idx // 40 + 1)
+            torch.cuda.synchronize()
+            print('{} seconds'.format(time.time() - timestemp))
             librosa.output.write_wav(wav_name, wav, sr=22050)
             print('{} Saved!'.format(wav_name))
-
-            wav = xm.to(torch.device("cpu")).data.numpy()
-            wav_name = '{}/{}_mulaw.wav'.format(sample_path, batch_idx)
-            torch.cuda.synchronize()
-            librosa.output.write_wav(wav_name, wav, sr=22050)
-            print('{} Saved!'.format(wav_name))
-
-            if batch_idx > 5* 40:
-                break
-            # q_0 = Normal(x.new_zeros(x.size()), x.new_ones(x.size()))
-            # z = q_0.sample()
-            # # a = torch.FloatTensor(z.shape).uniform_(temp, 1.0).to(device)
-            # z = z * temp
-            # torch.cuda.synchronize()
-            # timestemp = time.time()
-            # with torch.no_grad():
-            #     y_gen = model.reverse(z, c).squeeze()
-
-            # wav = y_gen.to(torch.device("cpu")).data.numpy()
-            # wav_name = '{}/{}.wav'.format(sample_path, batch_idx // 40 + 1)
-            # torch.cuda.synchronize()
-            # print('{} seconds'.format(time.time() - timestemp))
-            # librosa.output.write_wav(wav_name, wav, sr=22050)
-            # print('{} Saved!'.format(wav_name))
 
 
 def load_checkpoint(step, model):
@@ -114,13 +86,13 @@ if __name__ == "__main__":
     sample_path, save_path = mkdir(args, synthesize=True)
     synth_loader = load_dataset(args)
     hps = Hyperparameters(args)
-    # model = build_model(hps)
-    # model, global_epoch, global_step = load_checkpoint(args.load_step, model)
-    # # model = WaveNODE.remove_weightnorm(model)
-    # model.to(device)
-    # model.eval()
+    model = build_model(hps)
+    model, global_epoch, global_step = load_checkpoint(args.load_step, model)
+    # model = WaveNODE.remove_weightnorm(model)
+    model.to(device)
+    model.eval()
 
     print('sample_path', sample_path)
 
     with torch.no_grad():
-        synthesize(None, args.temp, args.num_synth)
+        synthesize(model, args.temp, args.num_synth)

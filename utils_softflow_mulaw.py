@@ -10,13 +10,13 @@ def mu_law(x, reverse=False):
 def actnorm_init(train_loader, model, gpu):
     x_seed, c_seed = next(iter(train_loader))
     x_seed, c_seed = x_seed.cuda(gpu, non_blocking=True), c_seed.cuda(gpu, non_blocking=True)
+    std_in = torch.zeros_like(x_seed[:,:,:1])
     with torch.no_grad():
-        model(x_seed, c_seed)
+        model(x_seed, c_seed, std_in)
 
     print('ActNorm is initilized!')
 
     del x_seed, c_seed
-
 
 def get_logger(log_path, model_name, test_cll=False, test_speed=False):
     log_eval = open(os.path.join(log_path, '{}.txt'.format('eval')), 'a')
@@ -37,7 +37,7 @@ def mkdir(args, synthesize=False, test=False):
     set_desc = 'SMART-Vocoder_hop_' + str(args.hop_length)
     if args.n_channels >= 128:
         set_desc = set_desc + '_BIG'
-    set_desc = set_desc + '_mcconfig_mulaw'
+    set_desc = set_desc + '_softflow_mulaw'
 
     if synthesize:
         sample_path = 'synthesize/' + args.model_name + '/' + set_desc +'/temp_' + str(args.temp)
