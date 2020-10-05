@@ -5,4 +5,4 @@ logs/
 samples/
 synthesize/
 legacy/
-DB_temp/
+DB/
