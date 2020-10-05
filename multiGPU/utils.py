@@ -2,9 +2,9 @@ import torch
 import os
 
 
-def actnorm_init(train_loader, model, device):
+def actnorm_init(train_loader, model, gpu):
     x_seed, c_seed = next(iter(train_loader))
-    x_seed, c_seed = x_seed.to(device), c_seed.to(device)
+    x_seed, c_seed = x_seed.cuda(gpu, non_blocking=True), c_seed.cuda(gpu, non_blocking=True)
     with torch.no_grad():
         model(x_seed, c_seed)
 
@@ -29,8 +29,9 @@ def get_logger(log_path, model_name, test_cll=False, test_speed=False):
 
 
 def mkdir(args, synthesize=False, test=False):
-    set_desc = f"SMART-Vocoder_fb-{args.n_flow_blocks}_ch-{args.n_channels}_bsz-{args.bsz}"
-
+    set_desc = 'SMART-Vocoder'
+    if args.n_channels >= 128:
+        set_desc = set_desc + '_BIG' 
     if synthesize:
         sample_path = 'synthesize/' + args.model_name + '/' + set_desc +'/temp_' + str(args.temp)
         save_path = 'params/' + args.model_name + '/' + set_desc
