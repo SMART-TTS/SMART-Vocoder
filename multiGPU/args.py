@@ -2,11 +2,11 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='SMART-Vocoder', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--data_path', type=str, default='datasets/preprocessed', help='Dataset path')
+    parser.add_argument('--data_path', type=str, default='datasets/preprocessed_hop_256', help='Dataset path')
     parser.add_argument('--model_name', type=str, default='SmartVocoder', help='Model name')
     parser.add_argument('--load_step', type=int, default=0, help='Load step')
     parser.add_argument('--epochs', '-e', type=int, default=5000, help='Number of epochs to train.')
-    parser.add_argument('--bsz', '-b', type=int, default=32, help='Batch size')
+    parser.add_argument('--bsz', '-b', type=int, default=24, help='Batch size')
     parser.add_argument('--bsz_init', '-bi', type=int, default=256, help='Batch size for initializing actnorm')
     parser.add_argument('--lr', type=float, default=5e-4, help='Learning rate')
     parser.add_argument('--step_size', type=int, default=200000, help='Step size of optimizer scheduler')
@@ -26,7 +26,7 @@ def parse_args():
     parser.add_argument('--n_flow_blocks', type=int, default=4, help='Number of flow blocks in Equal Resolution block')
     parser.add_argument('--n_layers', type=list, default=[8, 8, 8, 8], help='Number of layers in WaveNet')
     parser.add_argument('--di_cycle', type=list, default=[8, 6, 4, 2], help='Dilation cycle in WaveNet')
-    parser.add_argument('--n_channels', type=int, default=48, help='Number of channels in WaveNet')
+    parser.add_argument('--n_channels', type=int, default=64, help='Number of channels in WaveNet')
 
     # for snthesize.py
     parser.add_argument('--temp', type=float, default=0.6, help='Temperature')

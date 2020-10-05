@@ -331,7 +331,7 @@ class SmartVocoder(nn.Module):
         c_list = c_list[::-1]
 
         out = self.sqz_layer(x)
-        log_det_sum = 0.0
+        log_det_sum = torch.zeros(1).to(x.device)
         c_in = c_list[0]
         for i, block in enumerate(self.ER_blocks):
             out, log_det_sum = block(out, c_in, log_det_sum)
@@ -365,7 +365,7 @@ class SmartVocoder(nn.Module):
         c_in = torch.repeat_interleave(c_list[0], dim=0, repeats=sc**(len(self.ER_blocks)-1))
 
         for i, block in enumerate(self.ER_blocks[::-1]):
-            out, _ = block.reverse(out, c_in)
+            out, _ = block.module.reverse(out, c_in)
 
             if i != len(self.ER_blocks)-1 :
                 B, C, T = out.shape
@@ -376,3 +376,9 @@ class SmartVocoder(nn.Module):
         x = self.sqz_layer.reverse(out)
 
         return x
+
+    def multi_gpu_wrapper(self, f):
+        for i, ER_block in enumerate(self.ER_blocks):
+            self.ER_blocks[i] = f(ER_block)
+        self.upsample_conv = f(self.upsample_conv)
+
