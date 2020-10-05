@@ -6,7 +6,7 @@ from torch.distributions.normal import Normal
 from torch.cuda.amp import GradScaler, autocast
 import torch.distributed as dist
 import torch.multiprocessing as mp
-from args_BIG_mcconfig import parse_args
+from args_BIG import parse_args
 from data import KORDataset, collate_fn_tr, collate_fn_synth
 from hps import Hyperparameters
 from model import SmartVocoder

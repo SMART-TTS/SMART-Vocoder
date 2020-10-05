@@ -7,23 +7,18 @@ from multiprocessing import cpu_count
 import argparse
 import re
 import random
+import glob
 
 random.seed(1234)
 
-def build_from_path(in_dir, out_dir, csv_path, hop_length, num_workers=1):
+def build_from_path(in_dir, out_dir, hop_length, num_workers=1):
     executor = ProcessPoolExecutor(max_workers=num_workers)
     futures = []
     index = 1
-    with open(os.path.join(csv_path), encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            last_idx = line.find('|')
-            line = line[:last_idx]
-            parts = line.split('_')
-            wav_path = os.path.join(in_dir, parts[0], parts[1], 'wav_org', '%s.wav' % parts[2])
-            if not os.path.exists(wav_path):
-                continue
-            save_dir = os.path.join(parts[0], parts[1])
+    for folder in glob.iglob(in_dir + '/**/wav_22', recursive=True):
+        for wav_name in os.listdir(folder):
+            wav_path = os.path.join(folder, wav_name)
+            save_dir = folder.replace(in_dir+'/',"")
             futures.append(executor.submit(
                 partial(_process_utterance, out_dir, save_dir, index, wav_path, hop_length)))
             index += 1
@@ -45,8 +40,8 @@ def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
 
     wav, _ = librosa.load(wav_path, sr=sr)
     wav, _ = librosa.effects.trim(wav, top_db=35)
-    out = wav
-    linear = librosa.stft(y=wav,
+    out = wav / np.abs(wav).max() * 0.999
+    linear = librosa.stft(y=out,
                         n_fft=fft_size,
                         window=window,
                         hop_length=hop_length,
@@ -78,7 +73,7 @@ def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
     mel_path = os.path.join(save_dir, 'mel-%05d.npy' % index)
 
     if not os.path.isdir(os.path.join(out_dir, save_dir)):
-        os.makedirs(os.path.join(out_dir, save_dir))
+        os.makedirs(os.path.join(out_dir, save_dir), exist_ok=True)
 
     np.save(os.path.join(out_dir, audio_path),
             out.astype(np.float32), allow_pickle=False)
@@ -89,9 +84,9 @@ def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
     return audio_path, mel_path, timesteps
 
 
-def preprocess(in_dir, out_dir, csv_path, hop_length, num_workers):
+def preprocess(in_dir, out_dir, hop_length, num_workers):
     os.makedirs(out_dir, exist_ok=True)
-    metadata = build_from_path(in_dir, out_dir, csv_path, hop_length, num_workers)
+    metadata = build_from_path(in_dir, out_dir, hop_length, num_workers)
     write_metadata(metadata, out_dir, hop_length)
 
 
@@ -110,15 +105,13 @@ def write_metadata(metadata, out_dir, hop_length):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Preprocessing',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--in_dir', '-i', type=str, default='datasets', help='In Directory')
-    parser.add_argument('--csv_path', '-ci', type=str, default='datasets/metadata_full.csv', help='Metadata path')
+    parser.add_argument('--in_dir', '-i', type=str, default='DB', help='In Directory')
     parser.add_argument('--hop_length', '-hl', type=int, default=256, help='Hop size')
     parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed', help='Out Directory')
     args = parser.parse_args()
 
 
-    num_workers = cpu_count() - 15
-    out_dir = args.out_dir + '_hop_' + str(args.hop_length) + '_44kHz'
+    num_workers = cpu_count() - 5
     print('<--- Preprocess start --->')
-    preprocess(args.in_dir, out_dir, args.csv_path, args.hop_length, num_workers)
+    preprocess(args.in_dir, args.out_dir, args.hop_length, num_workers)
     print('<--- Preprocess done --->')
