@@ -60,3 +60,15 @@ def mkdir(args, synthesize=False, test=False):
         os.makedirs(log_path)
 
     return sample_path, save_path, load_path, log_path
+
+def stft(y, scale='linear'):
+    D = torch.stft(y, n_fft=1024, hop_length=256, win_length=1024)#, window=torch.hann_window(1024).cuda())
+    D = torch.sqrt(D.pow(2).sum(-1) + 1e-10)
+    # D = torch.sqrt(torch.clamp(D.pow(2).sum(-1), min=1e-10))
+    if scale == 'linear':
+        return D
+    elif scale == 'log':
+        S = 2 * torch.log(torch.clamp(D, 1e-10, float("inf")))
+        return S
+    else:
+        pass

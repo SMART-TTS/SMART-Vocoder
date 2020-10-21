@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.distributions.normal import Normal
-from args import parse_args
+from args_merged import parse_args
 from data import KORDataset, collate_fn_synth
 from hps import Hyperparameters
 from model import SmartVocoder
@@ -49,13 +49,6 @@ def synthesize(model, temp, num_synth):
             torch.cuda.synchronize()
             print('{} seconds'.format(time.time() - timestemp))
             librosa.output.write_wav(wav_name, wav, sr=22050)
-            print('{} Saved!'.format(wav_name))
-
-
-            x = x.squeeze().to(torch.device("cpu")).data.numpy()
-            wav_name = '{}/{}_orig.wav'.format(sample_path, batch_idx)
-            torch.cuda.synchronize()
-            librosa.output.write_wav(wav_name, x, sr=22050)
             print('{} Saved!'.format(wav_name))
 
 
