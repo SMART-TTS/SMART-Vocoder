@@ -83,7 +83,7 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
 
         stft_est = stft(y_gen[:, 0], scale='linear')
         stft_gt = stft(x[:, 0], scale='linear')
-        loss_frame = 0.1 * criterion_frame(stft_est, stft_gt)
+        loss_frame = 0.005 * criterion_frame(stft_est, stft_gt)
         scaler.scale(loss_frame).backward()
         
         if torch.isnan(loss) or torch.isnan(loss_frame):
