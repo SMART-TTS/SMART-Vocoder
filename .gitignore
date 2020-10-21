@@ -6,3 +6,5 @@ samples/
 synthesize/
 legacy/
 DB/
+DB_merged/
+mel2audio/

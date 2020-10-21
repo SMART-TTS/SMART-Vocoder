@@ -2,7 +2,7 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='SMART-Vocoder', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--data_path', type=str, default='datasets/preprocessed', help='Dataset path')
+    parser.add_argument('--data_path', type=str, default='datasets/preprocessed_merged', help='Dataset path')
     parser.add_argument('--model_name', type=str, default='SmartVocoder', help='Model name')
     parser.add_argument('--load_step', type=int, default=0, help='Load step')
     parser.add_argument('--epochs', '-e', type=int, default=5000, help='Number of epochs to train.')
