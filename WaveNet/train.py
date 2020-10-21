@@ -35,7 +35,7 @@ parser.add_argument('--model_name', type=str, default='wavenet_gaussian_01', hel
 parser.add_argument('--load_step', type=int, default=0, help='Model Load Step')
 
 parser.add_argument('--epochs', '-e', type=int, default=1000, help='Number of epochs to train.')
-parser.add_argument('--batch_size', '-b', type=int, default=8, help='Batch size.')
+parser.add_argument('--batch_size', '-b', type=int, default=6, help='Batch size.')
 parser.add_argument('--learning_rate', '-lr', type=float, default=0.001, help='The Learning Rate.')
 parser.add_argument('--ema_decay', type=float, default=0.9999, help='Exponential Moving Average Decay')
 
