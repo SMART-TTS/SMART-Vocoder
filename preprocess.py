@@ -34,6 +34,8 @@ def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
         fmax = 11000
         n_mels = 80
         eps = 1e-5
+        max_db = 100
+        ref_db = 20
     else:
         import sys
         sys.exit('hop_length should be 256 !')
@@ -49,7 +51,9 @@ def _process_utterance(out_dir, save_dir, index, wav_path, hop_length):
     mag = np.abs(linear)
     mel_basis = librosa.filters.mel(sr, fft_size, n_mels, fmin, fmax)
     mel = np.dot(mel_basis, mag).T  # (t, n_mels)
-    mel_spectrogram = 20 * np.log10(np.maximum(eps, mel))
+    mel = 20 * np.log10(np.maximum(eps, mel))
+    mel_spectrogram = np.maximum((mel + max_db - ref_db) / max_db, 1e-8)
+
 
     pad = (out.shape[0] // hop_length + 1) * hop_length - out.shape[0]
     pad_l = pad // 2
