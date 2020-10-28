@@ -77,17 +77,17 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
 
         scaler.scale(loss).backward()
 
-        with autocast():
-            z = torch.randn_like(x)
-            y_gen = model.reverse(z, c)     
+        # with autocast():
+        #     z = torch.randn_like(x)
+        #     y_gen = model.reverse(z, c)     
 
-        stft_est = stft(y_gen[:, 0], scale='linear')
-        stft_gt = stft(x[:, 0], scale='linear')
-        loss_frame = 0.1 * criterion_frame(stft_est, stft_gt)
-        scaler.scale(loss_frame).backward()
+        # stft_est = stft(y_gen[:, 0], scale='linear')
+        # stft_gt = stft(x[:, 0], scale='linear')
+        # loss_frame = 0.2 * criterion_frame(stft_est, stft_gt)
+        # scaler.scale(loss_frame).backward()
         
-        if torch.isnan(loss) or torch.isnan(loss_frame):
-            continue
+        # if torch.isnan(loss) or torch.isnan(loss_frame):
+        #     continue
 
         scaler.step(optimizer)
         scaler.update()
@@ -107,8 +107,8 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
             avg_rn_loss = np.array(running_loss)
             avg_time = (time.time() - timestemp) / log_interval
 
-            print('Global Step : {}, [{}, {}] [NLL, Log p(z), Log Det] : {}, STFT_loss: {}, avg time: {:0.4f}'
-                  .format(global_step, epoch, epoch_step, avg_rn_loss, loss_frame.item(), avg_time))
+            print('Global Step : {}, [{}, {}] [NLL, Log p(z), Log Det] : {},  avg time: {:0.4f}'
+                  .format(global_step, epoch, epoch_step, avg_rn_loss,  avg_time))
 
             state = {}
             state['Global Step'] = global_step

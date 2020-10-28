@@ -24,7 +24,7 @@ init_time = time.time()
 
 parser = argparse.ArgumentParser(description='Train WaveNet of Korean Dataset',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('--data_path', type=str, default='../datasets/preprocessed/', help='Dataset Path')
+parser.add_argument('--data_path', type=str, default='../datasets/preprocessed_merged/', help='Dataset Path')
 parser.add_argument('--sample_path', type=str, default='./samples', help='Sample Path')
 parser.add_argument('--save', '-s', type=str, default='./params', help='Folder to save checkpoints.')
 parser.add_argument('--load', '-l', type=str, default='./params', help='Checkpoint path to resume / test.')
