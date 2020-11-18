@@ -294,16 +294,23 @@ if __name__ == "__main__":
         log.flush()
         log_train.flush()
         log_eval.flush()
-
+        for param_group in optimizer.param_groups:
+            print('lr', param_group['lr'])
+    
     start_time = time.time()
     dateTime = datetime.datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')
     print('training starts at ', dateTime)
 
     for epoch in range(global_epoch + 1, args.epochs + 1):
+        for param_group in optimizer.param_groups:
+                        print('lr', param_group['lr'])
+
+        
         training_epoch_loss = train(epoch, model, optimizer, scaler, scheduler, log_train, args)
 
         with torch.no_grad():
             eval_epoch_loss = evaluate(epoch, model, log_eval)
+
 
         state['training_loss'] = training_epoch_loss
         state['eval_loss'] = eval_epoch_loss

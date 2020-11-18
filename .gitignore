@@ -6,7 +6,7 @@ samples/
 synthesize/
 legacy/
 DB/
-DB_merged/
+DB_jka/
 mel2audio/
 WaveNet/
 mel2audio_SMART-Vocoder/
