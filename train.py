@@ -8,7 +8,7 @@ from args import parse_args
 from data import KORDataset, collate_fn_tr, collate_fn_synth
 from hps import Hyperparameters
 from model import SmartVocoder
-from utils import actnorm_init, get_logger, mkdir, stft
+from utils import actnorm_init, get_logger, mkdir
 import numpy as np
 import librosa
 import os
@@ -44,7 +44,6 @@ def load_dataset(args):
 def build_model(hps, log):
     model = SmartVocoder(hps)
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    # print(model)
     print('number of parameters:', n_params)
     state = {}
     state['n_params'] = n_params
@@ -76,18 +75,6 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
             loss = -(log_p + log_det)
 
         scaler.scale(loss).backward()
-
-        # with autocast():
-        #     z = torch.randn_like(x)
-        #     y_gen = model.reverse(z, c)     
-
-        # stft_est = stft(y_gen[:, 0], scale='linear')
-        # stft_gt = stft(x[:, 0], scale='linear')
-        # loss_frame = 0.2 * criterion_frame(stft_est, stft_gt)
-        # scaler.scale(loss_frame).backward()
-        
-        # if torch.isnan(loss) or torch.isnan(loss_frame):
-        #     continue
 
         scaler.step(optimizer)
         scaler.update()
@@ -237,21 +224,7 @@ def load_checkpoint(step, model, optimizer, scheduler):
         load_path, "checkpoint_step{:09d}.pth".format(step))
     print("Load checkpoint from: {}".format(checkpoint_path))
     checkpoint = torch.load(checkpoint_path)
-
-    # generalized load procedure for both single-gpu and DataParallel models
-    # https://discuss.pytorch.org/t/solved-keyerror-unexpected-key-module-encoder-embedding-weight-in-state-dict/1686/3
-    try:
-        model.load_state_dict(checkpoint["state_dict"])
-    except RuntimeError:
-        print("INFO: this model is trained with DataParallel. Creating new state_dict without module...")
-        state_dict = checkpoint["state_dict"]
-        from collections import OrderedDict
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k[7:]  # remove `module.`
-            new_state_dict[name] = v
-        model.load_state_dict(new_state_dict)
-
+    model.load_state_dict(checkpoint["state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     scheduler.load_state_dict(checkpoint["scheduler"])
     g_epoch = checkpoint["global_epoch"]
