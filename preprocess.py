@@ -115,7 +115,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
 
-    num_workers = cpu_count() - 5
+    num_workers = max(cpu_count() - 5, 1)
     print('<--- Preprocess start --->')
     preprocess(args.in_dir, args.out_dir, args.hop_length, num_workers)
     print('<--- Preprocess done --->')

@@ -8,11 +8,23 @@ This repository provides the official pytorch implementation of SMART-Vocoder
 - soundfile
 - librosa
 
+## Prepare dataset:
+The official KOR DB will be publicly available soon.
+Instead, you can use [LJ speech dataset](https://keithito.com/LJ-Speech-Dataset/).
+
+
+## Preprocessing
+<pre>
+<code>
+python preprocess.py --in_dir DB --out_dir datasets/preprocessed
+</code>
+</pre>
+
 ## Training
 To train the model, run this command:
 <pre>
 <code>
-write your own code here
+python train.py
 </code>
 </pre>
 
@@ -20,7 +32,7 @@ write your own code here
 To evaluate, run:
 <pre>
 <code>
-write your own code here
+
 </code>
 </pre>
 
