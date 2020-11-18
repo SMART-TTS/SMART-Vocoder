@@ -28,11 +28,18 @@ CUDA_VISIBLE_DEVICES=0 python train.py --bsz 8 --n_ER_blocks 4 --n_flow_blocks 5
 </code>
 </pre>
 
-## Evaluation
-To evaluate, run:
+## Generation
+To generate with the trained model, run:
 <pre>
 <code>
+CUDA_VISIBLE_DEVICES=0 python synthesize.py --load_step 123456 --temp 0.6 --num_synth 10
+</code>
+</pre>
 
+or you can run the example code:
+<pre>
+<code>
+CUDA_VISIBLE_DEVICES=0 python synthesize.py --load_step 123456 --temp 0.6 --num_synth 10
 </code>
 </pre>
 
