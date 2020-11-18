@@ -24,7 +24,7 @@ python preprocess.py --in_dir DB --out_dir datasets/preprocessed
 To train the model, run this command:
 <pre>
 <code>
-python train.py
+CUDA_VISIBLE_DEVICES=0 python train.py --bsz 8 --n_ER_blocks 4 --n_flow_blocks 5
 </code>
 </pre>
 

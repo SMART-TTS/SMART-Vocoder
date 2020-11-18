@@ -37,7 +37,6 @@ def synthesize(model, temp, num_synth):
             x, c = x.to(device), c.to(device)
             q_0 = Normal(x.new_zeros(x.size()), x.new_ones(x.size()))
             z = q_0.sample()
-            # a = torch.FloatTensor(z.shape).uniform_(temp, 1.0).to(device)
             z = z * temp
             torch.cuda.synchronize()
             timestemp = time.time()
