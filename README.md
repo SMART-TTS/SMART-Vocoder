@@ -59,7 +59,7 @@ Synthesized audio samples can be found at 'outputs_LJ/'
 
 ## Pretrained model
 
-[Click Here](https://drive.google.com/file/d/17AbkGNWk92Q98QajNgtakbjc_GQKqel_/view?usp=sharing) to download the pretrained model on the KOR DB. 
+[Click Here](https://drive.google.com/file/d/1rqjAjRBtje5ZHhgl6OvKdvw0pGODaNrh/view?usp=sharing) to download the pretrained model on the KOR DB. 
 
 ## References
 - WaveGlow: https://github.com/NVIDIA/waveglow
