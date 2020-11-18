@@ -45,17 +45,21 @@ CUDA_VISIBLE_DEVICES=0 python synthesize.py --load_step 123456 --temp 0.6 --num_
 </code>
 </pre>
 
-or you can run the example code with the pretrained model:
+or you can run the example code with the pretrained model (pretrained/checkpoint.pth):
 <pre>
 <code>
 CUDA_VISIBLE_DEVICES=0 python mel2audio.py
 </code>
 </pre>
 
-Our pretrained model was trained on the KOR DB (not on LJ Speech)
+Our pretrained model was trained on the KOR DB (not on LJ Speech).
 
 ## Results
 Synthesized audio samples can be found at 'outputs_LJ/'
+
+## Pretrained model
+
+[Click Here](https://drive.google.com/file/d/17AbkGNWk92Q98QajNgtakbjc_GQKqel_/view?usp=sharing) to download the pretrained model on the KOR DB. 
 
 ## References
 - WaveGlow: https://github.com/NVIDIA/waveglow
