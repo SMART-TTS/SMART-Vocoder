@@ -87,7 +87,6 @@ if __name__ == "__main__":
     hps = Hyperparameters(args)
     model = build_model(hps)
     model, global_epoch, global_step = load_checkpoint(args.load_step, model)
-    # model = WaveNODE.remove_weightnorm(model)
     model.to(device)
     model.eval()
 
