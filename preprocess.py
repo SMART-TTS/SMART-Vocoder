@@ -109,9 +109,9 @@ def write_metadata(metadata, out_dir, hop_length):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Preprocessing',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--in_dir', '-i', type=str, default='DB_merged', help='In Directory')
+    parser.add_argument('--in_dir', '-i', type=str, default='DB_jka', help='In Directory')
     parser.add_argument('--hop_length', '-hl', type=int, default=256, help='Hop size')
-    parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed_merged', help='Out Directory')
+    parser.add_argument('--out_dir', '-o', type=str, default='datasets/preprocessed_jka', help='Out Directory')
     args = parser.parse_args()
 
 

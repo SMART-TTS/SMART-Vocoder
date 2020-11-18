@@ -2,14 +2,14 @@ import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description='SMART-Vocoder', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--data_path', type=str, default='datasets/preprocessed_IITP_FPHJ0', help='Dataset path')
+    parser.add_argument('--data_path', type=str, default='datasets/preprocessed_jka', help='Dataset path')
     parser.add_argument('--model_name', type=str, default='SmartVocoder', help='Model name')
     parser.add_argument('--load_step', type=int, default=0, help='Load step')
     parser.add_argument('--epochs', '-e', type=int, default=5000, help='Number of epochs to train.')
     parser.add_argument('--bsz', '-b', type=int, default=8, help='Batch size')
     parser.add_argument('--bsz_init', '-bi', type=int, default=256, help='Batch size for initializing actnorm')
-    parser.add_argument('--lr', type=float, default=2e-4, help='Learning rate')
-    parser.add_argument('--step_size', type=int, default=987654321, help='Step size of optimizer scheduler')
+    parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate')
+    parser.add_argument('--step_size', type=int, default=250000, help='Step size of optimizer scheduler')
     parser.add_argument('--gamma', type=float, default=0.5, help='Decay ratio of learning rate')
     parser.add_argument('--num_workers', type=int, default=1, help='Number of workers')
     parser.add_argument('--log_interval', type=int, default=200, help='Logging interval during training')

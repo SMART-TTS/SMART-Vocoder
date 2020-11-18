@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import DataLoader
 from torch.distributions.normal import Normal
-from args_merged import parse_args
+from args import parse_args
 from data import KORDataset, collate_fn_synth
 from hps import Hyperparameters
 from model import SmartVocoder
