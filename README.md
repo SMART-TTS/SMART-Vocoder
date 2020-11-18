@@ -52,6 +52,11 @@ CUDA_VISIBLE_DEVICES=0 python mel2audio.py
 </code>
 </pre>
 
+Our pretrained model was trained on the KOR DB (not on LJ Speech)
 
 ## Results
-Synthesized 
+Synthesized audios can be found at 
+
+## References
+- WaveGlow: https://github.com/NVIDIA/waveglow
+- FloWaveNet: https://github.com/ksw0306/FloWaveNet
