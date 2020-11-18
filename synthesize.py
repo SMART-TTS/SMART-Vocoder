@@ -55,9 +55,7 @@ def load_checkpoint(step, model):
     checkpoint_path = os.path.join(save_path, "checkpoint_step{:09d}.pth".format(step))
     print("Load checkpoint from: {}".format(checkpoint_path))
     checkpoint = torch.load(checkpoint_path)
-
     model.load_state_dict(checkpoint["state_dict"])
-
     g_epoch = checkpoint["global_epoch"]
     g_step = checkpoint["global_step"]
 

@@ -75,7 +75,6 @@ def train(epoch, model, optimizer, scaler, scheduler, log_train, args):
             loss = -(log_p + log_det)
 
         scaler.scale(loss).backward()
-
         scaler.step(optimizer)
         scaler.update()
         scheduler.step()
