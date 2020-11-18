@@ -29,7 +29,6 @@ def synthesize(model):
         mel = np.load(os.path.join(data_path, filename))
         mel = torch.tensor(mel).to(device).unsqueeze(0).permute(0, 2, 1)
         B, C, T = mel.shape
-        print('Input mel shape:', mel.shape)
         z = torch.randn(1, 1, T*hop_size).to(device)
         z = z * temp
         timestemp = time.time()
@@ -37,9 +36,6 @@ def synthesize(model):
             y_gen = model.reverse(z, mel).squeeze()
         wav = y_gen.to(torch.device("cpu")).data.numpy()
         wav_name = '{}/{}.wav'.format(sample_path,  filename.split('.')[0])
-        dur_wav = len(wav) / sr
-        dur_synth = time.time() - timestemp
-        print('(높을 수록 좋음) RTF: {:0.2f}, Speech 길이: {:0.2f}(s)'.format(dur_wav / dur_synth, dur_wav))
         sf.write(wav_name, wav, sr)
         print('{} Saved!'.format(wav_name))
 

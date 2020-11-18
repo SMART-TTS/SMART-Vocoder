@@ -20,6 +20,15 @@ python preprocess.py --in_dir DB --out_dir datasets/preprocessed
 </code>
 </pre>
 
+If you use LJ speech dataset, 
+
+<pre>
+<code>
+python preprocess_LJ.py --in_dir LJSpeech-1.1 --out_dir datasets/preprocessed_LJ
+</code>
+</pre>
+
+
 ## Training
 To train the model, run this command:
 <pre>
@@ -36,16 +45,13 @@ CUDA_VISIBLE_DEVICES=0 python synthesize.py --load_step 123456 --temp 0.6 --num_
 </code>
 </pre>
 
-or you can run the example code:
+or you can run the example code with the pretrained model:
 <pre>
 <code>
-CUDA_VISIBLE_DEVICES=0 python synthesize.py --load_step 123456 --temp 0.6 --num_synth 10
+CUDA_VISIBLE_DEVICES=0 python mel2audio.py
 </code>
 </pre>
 
-## Pre-trained Models
-You can download pretrained models here:
-* <http://example.com/>
 
 ## Results
-Our model's performance is here:
+Synthesized 
