@@ -47,7 +47,7 @@ See inference.ipynb
 
 
 ## Results
-Synthesized audio samples can be found at 'generated_files' and 'generated_files_ms'
+생성된 wav 파일은 'generated_files', 'generated_files_ms' 폴더에서 확인하실 수 있으시며, 추후 데이터셋 공개가 된 이후 업데이트 될 예정입니다.
 
 
 ## References
