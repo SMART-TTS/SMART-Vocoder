@@ -39,7 +39,6 @@ python preprocess_LJ.py --in_dir LJSpeech-1.1 --out_dir datasets/preprocessed
 </code>
 </pre>
 
-
 ## Training
 To train the model, run this command:
 <pre>
