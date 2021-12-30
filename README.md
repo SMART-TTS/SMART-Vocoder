@@ -47,12 +47,10 @@ See inference.ipynb
 
 
 ## Results
-Synthesized audio samples can be found at 'outputs_LJ/'
+Synthesized audio samples can be found at 'generated_files' and 'generated_files_ms'
 
-## Pretrained model
-
-[Click Here](https://drive.google.com/file/d/1rqjAjRBtje5ZHhgl6OvKdvw0pGODaNrh/view?usp=sharing) to download the pretrained model on the KOR DB. 
 
 ## References
+- ViTS: https://github.com/jaywalnut310/vits (MIT License)
 - WaveGlow: https://github.com/NVIDIA/waveglow
-- FloWaveNet: https://github.com/ksw0306/FloWaveNet
+- HiFiGAN: https://github.com/jik876/hifi-gan
