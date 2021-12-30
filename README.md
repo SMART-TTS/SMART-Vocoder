@@ -15,9 +15,9 @@
 
 
 ## Requirements
-librosa==0.8.0
-matplotlib==3.3.1
-numpy==1.18.5
+librosa==0.8.0 \\
+matplotlib==3.3.1 \\
+numpy==1.18.5 \\
 scipy==1.5.2
 tensorboard==2.3.0
 torch==1.6.0
